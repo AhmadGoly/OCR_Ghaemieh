@@ -1,0 +1,362 @@
+import os
+import tempfile
+import time
+import torch
+import cv2 as cv
+import numpy as np
+from PIL import Image
+from pdf2image import convert_from_path
+import pytesseract
+import matplotlib.pyplot as plt
+import imutils
+import arabic_reshaper
+from bidi.algorithm import get_display
+from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, LlavaOnevisionForConditionalGeneration
+from qwen_vl_utils import process_vision_info
+from datetime import datetime
+from pathlib import Path
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractCliOcrOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from openai import OpenAI
+from pydantic import BaseModel, Field
+
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+
+class PDFOCRProcessor:
+    def __init__(self, pdf_path, lang='eng+ara+fas', ocr_backend='tesseract',
+                 qwen_model_name="NAMAA-Space/Qari-OCR-0.2.2.1-VL-2B-Instruct",
+                 qwen_max_tokens=2000,
+                 varco_model_name="NCSOFT/VARCO-VISION-2.0-1.7B-OCR",
+                 varco_max_tokens=1024,
+                 llm_props: list = None):
+        self.pdf_path = pdf_path
+        self.lang = lang
+        self.ocr_backend = ocr_backend
+        self.qwen_model_name = qwen_model_name
+        self.qwen_max_tokens = qwen_max_tokens
+        self.varco_model_name = varco_model_name
+        self.varco_max_tokens = varco_max_tokens
+        self.qwen_model = None
+        self.qwen_processor = None
+        self.varco_model = None
+        self.varco_processor = None
+        self.llm_client = None
+        self.llm_model_name = None
+        log("Initializing PDFOCRProcessor...")
+
+        # LLM setup
+        if llm_props and isinstance(llm_props, list) and len(llm_props) == 3:
+            try:
+                api_key, base_url, model_name = llm_props
+                self.llm_client = OpenAI(api_key=api_key, base_url=base_url)
+                self.llm_model_name = model_name
+                log("LLM initialized.")
+            except Exception as e:
+                log(f"Failed to initialize LLM: {e}")
+                self.llm_client = None
+                self.llm_model_name = None
+        else:
+            log("LLM properties not provided or invalid. LLM will not be used.")
+
+        if self.ocr_backend == 'qwen':
+            if not torch.cuda.is_available():
+                raise RuntimeError("Qwen OCR requires a GPU, none detected.")
+            log("Loading Qwen model and processor on GPU...")
+            self.qwen_model = Qwen2VLForConditionalGeneration.from_pretrained(
+                self.qwen_model_name, torch_dtype="auto", device_map="auto")
+            self.qwen_processor = AutoProcessor.from_pretrained(self.qwen_model_name)
+            log("Qwen model loaded on GPU.")
+
+        if self.ocr_backend == 'varco':
+            if not torch.cuda.is_available():
+                raise RuntimeError("Varco OCR requires a GPU, none detected.")
+            log("Loading Varco model and processor on GPU...")
+            self.varco_model = LlavaOnevisionForConditionalGeneration.from_pretrained(
+                self.varco_model_name, torch_dtype=torch.float16, attn_implementation="sdpa", device_map="auto")
+            self.varco_processor = AutoProcessor.from_pretrained(self.varco_model_name)
+            log("Varco model loaded on GPU.")
+
+    def _to_gray(self, pil_image):
+        img = np.array(pil_image)
+        if len(img.shape) == 3 and img.shape[2] == 3:
+            return cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+        return img
+
+    def preprocess_page(self, pil_image):
+        log("Preprocessing page...")
+        img = cv.cvtColor(np.array(pil_image), cv.COLOR_RGB2BGR)
+        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        thresh = cv.adaptiveThreshold(gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 35, 11)
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (1,1))
+        opening = cv.morphologyEx(thresh, cv.MORPH_OPEN, kernel)
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (2,2))
+        processed = cv.dilate(opening, kernel, iterations=1)
+        log("Preprocessing done.")
+        return Image.fromarray(processed)
+
+    def enhance_contrast(self, pil_image):
+        log("Enhancing contrast...")
+        gray = self._to_gray(pil_image)
+        clahe = cv.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        enhanced = clahe.apply(gray)
+        log("Contrast enhancement done.")
+        return Image.fromarray(enhanced)
+
+    def rescale_image(self, pil_image, target_width=1200):
+        log("Rescaling image...")
+        img = cv.cvtColor(np.array(pil_image), cv.COLOR_RGB2BGR)
+        img_resized = imutils.resize(img, width=target_width)
+        img_resized = cv.cvtColor(img_resized, cv.COLOR_BGR2RGB)
+        log("Rescaling done.")
+        return Image.fromarray(img_resized)
+
+    def _fit_image_to_memory(self, pil_image, max_pixels=2_000_000):
+        w, h = pil_image.size
+        orig_w, orig_h = w, h
+        while w * h > max_pixels:
+            w = max(1, w // 2)
+            h = max(1, h // 2)
+            log(f"Warning: image too large ({orig_w}x{orig_h}), scaling down to ({w}x{h})")
+            pil_image = pil_image.resize((w, h), Image.LANCZOS)
+        return pil_image
+
+    def _ocr_tesseract(self, pil_image, lang=None):
+        log("Running Tesseract OCR...")
+        use_lang = lang if lang else self.lang
+        result = pytesseract.image_to_string(pil_image, lang=use_lang)
+        log("Tesseract OCR done.")
+        return result
+
+    def _ocr_qwen(self, pil_image):
+        log("Running Qwen OCR...")
+        torch.cuda.empty_cache()
+        fd, src = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        pil_image.save(src)
+        prompt = "Below is the image of one page of a document, as well as some raw textual content that was previously extracted for it. Just return the plain text representation of this document as if you were reading it naturally. Do not hallucinate."
+        messages = [{"role": "user", "content":[{"type":"image","image":f"file://{src}"},{"type":"text","text":prompt}]}]
+        log("Applying chat template...")
+        text_template = self.qwen_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        log("Processing vision info...")
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.qwen_processor(text=[text_template], images=image_inputs, videos=video_inputs, padding=True, return_tensors="pt")
+        inputs = inputs.to("cuda")
+        attempt = 0
+        max_attempts = 5
+        while attempt < max_attempts:
+            try:
+                log(f"Generating output from Qwen model, attempt {attempt+1}...")
+                generated_ids = self.qwen_model.generate(**inputs, max_new_tokens=self.qwen_max_tokens)
+                generated_ids_trimmed = [out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
+                output_text = self.qwen_processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+                break
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                    log(f"CUDA OOM detected for Qwen, clearing cache and reducing image size...")
+                    torch.cuda.empty_cache()
+                    w, h = pil_image.size
+                    new_w, new_h = max(1, int(w * 0.8)), max(1, int(h * 0.8))
+                    log(f"Reducing image size from ({w},{h}) to ({new_w},{new_h}) and retrying...")
+                    pil_image = pil_image.resize((new_w, new_h), Image.LANCZOS)
+                    pil_image.save(src)
+                    messages[0]["content"][0]["image"] = f"file://{src}"
+                    text_template = self.qwen_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                    image_inputs, video_inputs = process_vision_info(messages)
+                    inputs = self.qwen_processor(text=[text_template], images=image_inputs, videos=video_inputs, padding=True, return_tensors="pt")
+                    inputs = inputs.to("cuda")
+                    attempt += 1
+                else:
+                    try: os.remove(src)
+                    except: pass
+                    raise e
+        else:
+            try: os.remove(src)
+            except: pass
+            raise RuntimeError("Qwen failed after multiple memory reduction attempts.")
+        try: os.remove(src)
+        except: pass
+        torch.cuda.empty_cache()
+        log("Qwen OCR done.")
+        return output_text
+
+    def _ocr_varco(self, pil_image):
+        log("Running Varco OCR...")
+        torch.cuda.empty_cache()
+        w, h = pil_image.size
+        target_size = 2304
+        if max(w, h) < target_size:
+            scaling_factor = target_size / max(w, h)
+            new_w = int(w * scaling_factor)
+            new_h = int(h * scaling_factor)
+            log(f"Upscaling image from ({w},{h}) to ({new_w},{new_h}) for Varco")
+            pil_image = pil_image.resize((new_w, new_h), Image.LANCZOS)
+        conversation = [{"role":"user","content":[{"type":"image","image":pil_image},{"type":"text","text":"<ocr>"}]}]
+        attempt = 0
+        max_attempts = 5
+        while attempt < max_attempts:
+            try:
+                log(f"Applying Varco chat template, attempt {attempt+1}...")
+                inputs = self.varco_processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=True, return_dict=True, return_tensors="pt")
+                inputs = inputs.to(self.varco_model.device, torch.float16)
+                log(f"Generating output from Varco model, attempt {attempt+1}...")
+                generate_ids = self.varco_model.generate(**inputs, max_new_tokens=self.varco_max_tokens)
+                generate_ids_trimmed = [out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generate_ids)]
+                output = self.varco_processor.decode(generate_ids_trimmed[0], skip_special_tokens=False)
+                break
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                    log(f"CUDA OOM detected for Varco, clearing cache and reducing image size...")
+                    torch.cuda.empty_cache()
+                    w, h = pil_image.size
+                    new_w, new_h = max(1, int(w * 0.8)), max(1, int(h * 0.8))
+                    log(f"Reducing image size from ({w},{h}) to ({new_w},{new_h}) and retrying...")
+                    pil_image = pil_image.resize((new_w, new_h), Image.LANCZOS)
+                    conversation[0]["content"][0]["image"] = pil_image
+                    attempt += 1
+                else:
+                    raise e
+        else:
+            raise RuntimeError("Varco failed after multiple memory reduction attempts.")
+        torch.cuda.empty_cache()
+        log("Varco OCR done.")
+        return output
+
+    def _ocr_docling(self, pil_image, lang=None):
+        log("Running Docling OCR...")
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            pil_image.save(tmp_path, format="PNG")
+        use_langs = lang if lang else ["eng", "ara", "fas"]
+        log(f"Languages are: {use_langs}")
+        ocr_options = TesseractCliOcrOptions(force_full_page_ocr=True, lang=use_langs)
+        pipeline_options = PdfPipelineOptions(do_ocr=True, ocr_options=ocr_options)
+        converter = DocumentConverter(
+            format_options={InputFormat.IMAGE: PdfFormatOption(pipeline_options=pipeline_options)}
+        )
+        doc = converter.convert(tmp_path).document
+        try:
+            tmp_path.unlink()
+        except:
+            pass
+        log("Docling OCR done.")
+        return doc.export_to_markdown()
+
+    def ocr_image(self, pil_image, lang=None):
+        if self.ocr_backend == 'qwen':
+            return self._ocr_qwen(pil_image)
+        if self.ocr_backend == 'varco':
+            return self._ocr_varco(pil_image)
+        if self.ocr_backend == 'docling':
+            lang_list = self.lang.split('+') if self.lang else None
+            return self._ocr_docling(pil_image, lang_list)
+        return self._ocr_tesseract(pil_image, lang)
+
+    def clean_ocr_text(self, *ocr_outputs: str):
+        if not self.llm_client or not self.llm_model_name:
+            log("LLM not initialized, cannot rewrite OCR text.")
+            return ocr_outputs[0] if ocr_outputs else ""
+        formatted_outputs = "\n".join(
+            f"-----\nOCR output {i+1}:\n{txt}\n-----" 
+            for i, txt in enumerate(ocr_outputs)
+        )
+        class OCRCleanedText(BaseModel):
+            text: str = Field(..., description="Cleaned and consolidated OCR text")
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a Persian and English text rewriter. "
+                    "You will get OCR outputs separated like this (all for the same document, from different models):\n"
+                    "-----\nOCR output 1:\n...\n-----\nOCR output 2:\n...\n-----\n"
+                    "Use OCR 1 as the main template. Rewrite it to fix wrong words and obvious OCR mistakes. "
+                    "Use other outputs only if they suggest a better word for corrupted parts in OCR 1. "
+                    "Do not add extra words. Avoid repeating content. "
+                    "Respond only in JSON: {\"text\": \"...\"}."
+                )
+            },
+            {"role": "user", "content": formatted_outputs}
+        ]
+        completion = self.llm_client.chat.completions.parse(
+            model=self.llm_model_name,
+            messages=messages,
+            response_format=OCRCleanedText
+        )
+        return completion.choices[0].message.parsed.text
+
+    def visualize(self, image, text, title):
+        plt.figure(figsize=(12,6))
+        plt.subplot(1,2,1)
+        plt.imshow(image, cmap="gray")
+        plt.title(title)
+        plt.axis("off")
+        plt.subplot(1,2,2)
+        reshaped = arabic_reshaper.reshape(text)
+        bidi_text = get_display(reshaped)
+        plt.text(0, 1, bidi_text, fontsize=10, va="top", wrap=True)
+        plt.title("OCR Text")
+        plt.axis("off")
+        plt.show()
+
+    def process_demo(self, start_page=1, end_page=None, preprocess=False, contrast=False, scale=False, show=True, lang=None, rewrite_llm=False):
+        log("Starting demo processing...")
+        images = convert_from_path(self.pdf_path, first_page=start_page, last_page=end_page)
+        text = {}
+        for i, image in enumerate(images, start=start_page):
+            log(f"Processing page {i}...")
+            img = image
+            if preprocess: img = self.preprocess_page(img)
+            if contrast: img = self.enhance_contrast(img)
+            if scale: img = self.rescale_image(img)
+
+            start_t = time.time()
+            page_text = self.ocr_image(img, lang)
+            ocr_duration = time.time() - start_t
+            log(f"OCR completed in {ocr_duration:.2f} seconds")
+
+            if rewrite_llm and self.llm_client:
+                llm_start = time.time()
+                page_text = self.clean_ocr_text(page_text)
+                llm_duration = time.time() - llm_start
+                log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+
+            text[i] = page_text
+
+            if show:
+                self.visualize(img, page_text, f"Page {i}")
+
+            log(f"Page {i} OCR + LLM done.")
+
+        log("Demo OCR completed.")
+        return text
+
+
+    def process(self, start_page=1, end_page=None, preprocess=False, contrast=False, scale=False, lang=None, rewrite_llm=False):
+        log("Starting batch processing...")
+        images = convert_from_path(self.pdf_path, first_page=start_page, last_page=end_page)
+        results = []
+
+        for i, image in enumerate(images, start=start_page):
+            log(f"Processing page {i}...")
+            img = image
+            if preprocess: img = self.preprocess_page(img)
+            if contrast: img = self.enhance_contrast(img)
+            if scale: img = self.rescale_image(img)
+
+            start_t = time.time()
+            page_text = self.ocr_image(img, lang)
+            ocr_duration = time.time() - start_t
+            log(f"OCR completed in {ocr_duration:.2f} seconds")
+
+            if rewrite_llm and self.llm_client:
+                llm_start = time.time()
+                page_text = self.clean_ocr_text(page_text)
+                llm_duration = time.time() - llm_start
+                log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+
+            results.append({i: (page_text, ocr_duration)})
+            log(f"Page {i} OCR + LLM done.")
+
+        log("Batch processing completed.")
+        return results
