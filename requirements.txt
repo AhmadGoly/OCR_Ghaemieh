@@ -1,0 +1,10 @@
+pytesseract
+pdf2image
+python-bidi
+arabic-reshaper
+transformers
+qwen_vl_utils
+accelerate>=0.26.0
+peft
+bitsandbytes
+docling
