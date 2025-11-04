@@ -62,7 +62,13 @@ class PDFOCRProcessor:
 
         if self.ocr_backend == 'qwen':
             if not torch.cuda.is_available():
-                raise RuntimeError("Qwen OCR requires a GPU, none detected.")
+                raise RuntimeError("Qwen OCR requires a GPU, but none was detected.")
+
+            torch.cuda.empty_cache()
+            free_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1e9 - torch.cuda.memory_reserved(0) / 1e9
+            if free_memory_gb < 8:
+                raise RuntimeError(f"Qwen OCR requires at least 8GB of free GPU memory, but only {free_memory_gb:.2f}GB is available.")
+
             log("Loading Qwen model and processor on GPU...")
             self.qwen_model = Qwen2VLForConditionalGeneration.from_pretrained(
                 self.qwen_model_name, torch_dtype="auto", device_map="auto")
@@ -104,13 +110,16 @@ class PDFOCRProcessor:
         log("Contrast enhancement done.")
         return Image.fromarray(enhanced)
 
-    def rescale_image(self, pil_image, target_width=1200):
-        log("Rescaling image...")
-        img = cv.cvtColor(np.array(pil_image), cv.COLOR_RGB2BGR)
-        img_resized = imutils.resize(img, width=target_width)
-        img_resized = cv.cvtColor(img_resized, cv.COLOR_BGR2RGB)
+    def rescale_image(self, pil_image, scale=1.0):
+        if scale == 1.0:
+            return pil_image
+        log(f"Rescaling image by a factor of {scale}...")
+        width, height = pil_image.size
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        img_resized = pil_image.resize((new_width, new_height), Image.LANCZOS)
         log("Rescaling done.")
-        return Image.fromarray(img_resized)
+        return img_resized
 
     def _fit_image_to_memory(self, pil_image, max_pixels=2_000_000):
         w, h = pil_image.size
@@ -299,7 +308,7 @@ class PDFOCRProcessor:
         plt.axis("off")
         plt.show()
 
-    def process_demo(self, start_page=1, end_page=None, preprocess=False, contrast=False, scale=False, show=True, lang=None, rewrite_llm=False):
+    def process_demo(self, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, show=True, lang=None, rewrite_llm=False):
         log("Starting demo processing...")
         images = convert_from_path(self.pdf_path, first_page=start_page, last_page=end_page)
         text = {}
@@ -308,7 +317,7 @@ class PDFOCRProcessor:
             img = image
             if preprocess: img = self.preprocess_page(img)
             if contrast: img = self.enhance_contrast(img)
-            if scale: img = self.rescale_image(img)
+            if scale != 1.0: img = self.rescale_image(img, scale)
 
             start_t = time.time()
             page_text = self.ocr_image(img, lang)
@@ -332,7 +341,7 @@ class PDFOCRProcessor:
         return text
 
 
-    def process(self, start_page=1, end_page=None, preprocess=False, contrast=False, scale=False, lang=None, rewrite_llm=False):
+    def process(self, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, lang=None, rewrite_llm=False):
         log("Starting batch processing...")
         images = convert_from_path(self.pdf_path, first_page=start_page, last_page=end_page)
         results = []
@@ -342,7 +351,7 @@ class PDFOCRProcessor:
             img = image
             if preprocess: img = self.preprocess_page(img)
             if contrast: img = self.enhance_contrast(img)
-            if scale: img = self.rescale_image(img)
+            if scale != 1.0: img = self.rescale_image(img, scale)
 
             start_t = time.time()
             page_text = self.ocr_image(img, lang)
@@ -360,3 +369,24 @@ class PDFOCRProcessor:
 
         log("Batch processing completed.")
         return results
+
+    def process_image(self, image, preprocess=False, contrast=False, scale=1.0, lang=None, rewrite_llm=False):
+        log("Starting image processing...")
+        img = image
+        if preprocess: img = self.preprocess_page(img)
+        if contrast: img = self.enhance_contrast(img)
+        if scale != 1.0: img = self.rescale_image(img, scale)
+
+        start_t = time.time()
+        page_text = self.ocr_image(img, lang)
+        ocr_duration = time.time() - start_t
+        log(f"OCR completed in {ocr_duration:.2f} seconds")
+
+        if rewrite_llm and self.llm_client:
+            llm_start = time.time()
+            page_text = self.clean_ocr_text(page_text)
+            llm_duration = time.time() - llm_start
+            log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+
+        log("Image processing completed.")
+        return (page_text, ocr_duration)
