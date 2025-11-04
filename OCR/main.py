@@ -42,25 +42,6 @@ class ImageOCRResponse(BaseOCRResponse):
 class PDFPageOCRResponse(BaseOCRResponse):
     page: int = Field(..., description="The page number of the processed page.")
 
-app = FastAPI(
-    lifespan=lifespan,
-    title="OCR Processing API",
-    description="""
-A powerful and flexible API for performing Optical Character Recognition (OCR) on images and PDF documents.
-
-This API provides endpoints to process files using various OCR backends, including **Tesseract**, **Docling**, and GPU-accelerated models like **Qwen** and **Varco**.
-It also supports optional text enhancement using a configurable Large Language Model (LLM).
-
-### Features:
--   **Image and PDF Processing**: Endpoints for both single image files and multi-page PDF documents.
--   **Configurable OCR Backends**: Choose the best model for your needs on a per-request basis.
--   **Image Preprocessing**: Options to enable preprocessing, contrast enhancement, and scaling to improve OCR accuracy.
--   **LLM-Powered Text Correction**: Optionally use a language model to correct and clean up the raw OCR output.
--   **Detailed Responses**: Get structured JSON responses with the extracted text, model information, and performance metrics.
-    """,
-    version="1.0.0",
-)
-
 # This dictionary will hold the globally shared instances of our processors.
 models = {}
 
@@ -97,6 +78,24 @@ async def lifespan(app: FastAPI):
     yield
     # No cleanup needed, but yield is required for the context manager
 
+app = FastAPI(
+    lifespan=lifespan,
+    title="OCR Processing API",
+    description="""
+A powerful and flexible API for performing Optical Character Recognition (OCR) on images and PDF documents.
+
+This API provides endpoints to process files using various OCR backends, including **Tesseract**, **Docling**, and GPU-accelerated models like **Qwen** and **Varco**.
+It also supports optional text enhancement using a configurable Large Language Model (LLM).
+
+### Features:
+-   **Image and PDF Processing**: Endpoints for both single image files and multi-page PDF documents.
+-   **Configurable OCR Backends**: Choose the best model for your needs on a per-request basis.
+-   **Image Preprocessing**: Options to enable preprocessing, contrast enhancement, and scaling to improve OCR accuracy.
+-   **LLM-Powered Text Correction**: Optionally use a language model to correct and clean up the raw OCR output.
+-   **Detailed Responses**: Get structured JSON responses with the extracted text, model information, and performance metrics.
+    """,
+    version="1.0.0",
+)
 
 @app.get("/")
 def read_root():
