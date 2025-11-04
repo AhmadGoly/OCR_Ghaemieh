@@ -239,10 +239,14 @@ class PDFOCRProcessor:
             return self._ocr_qwen(pil_image)
         if self.ocr_backend == 'varco':
             return self._ocr_varco(pil_image)
+
+        effective_lang = lang if lang is not None else self.lang
+
         if self.ocr_backend == 'docling':
-            lang_list = self.lang.split('+') if self.lang else None
+            lang_list = effective_lang.split('+') if effective_lang else None
             return self._ocr_docling(pil_image, lang_list)
-        return self._ocr_tesseract(pil_image, lang)
+
+        return self._ocr_tesseract(pil_image, effective_lang)
 
     def clean_ocr_text(self, llm_client, llm_model_name, *ocr_outputs: str):
         if not llm_client or not llm_model_name:

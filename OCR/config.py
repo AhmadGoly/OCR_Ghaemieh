@@ -17,6 +17,7 @@ LOAD_VARCO = False
 FASTAPI_PORT = 4567
 
 # Default endpoint parameters
+DEFAULT_LANG = "eng+ara+fas"
 DEFAULT_MODEL = "tesseract"
 DEFAULT_PREPROCESS = False
 DEFAULT_CONTRAST = False

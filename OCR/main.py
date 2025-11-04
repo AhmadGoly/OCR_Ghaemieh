@@ -41,6 +41,7 @@ def read_root():
 @app.post("/ocr/image")
 async def ocr_image(
     file: UploadFile = File(...),
+    lang: str = Form(config.DEFAULT_LANG),
     model: str = Form(config.DEFAULT_MODEL),
     preprocess: bool = Form(config.DEFAULT_PREPROCESS),
     contrast: bool = Form(config.DEFAULT_CONTRAST),
@@ -61,6 +62,7 @@ async def ocr_image(
     image = Image.open(io.BytesIO(await file.read()))
     result = processor.process_image(
         image,
+        lang=lang,
         preprocess=preprocess,
         contrast=contrast,
         scale=scale,
@@ -74,6 +76,7 @@ async def ocr_image(
 @app.post("/ocr/pdf")
 async def ocr_pdf(
     file: UploadFile = File(...),
+    lang: str = Form(config.DEFAULT_LANG),
     model: str = Form(config.DEFAULT_MODEL),
     start_page: int = Form(1),
     end_page: int = Form(None),
@@ -101,6 +104,7 @@ async def ocr_pdf(
     try:
         results = processor.process(
             pdf_path=pdf_path,
+            lang=lang,
             start_page=start_page,
             end_page=end_page,
             preprocess=preprocess,
