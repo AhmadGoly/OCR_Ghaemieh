@@ -19,18 +19,30 @@ def load_models():
     Load OCR models at application startup.
     This runs only once when the FastAPI app starts.
     """
+    print("Initializing application and loading models...")
     if config.LOAD_TESSERACT:
+        print("Loading Tesseract model...")
         models['tesseract'] = PDFOCRProcessor(ocr_backend='tesseract')
+        print("Tesseract model loaded successfully.")
     if config.LOAD_DOCLING:
+        print("Loading Docling model...")
         models['docling'] = PDFOCRProcessor(ocr_backend='docling')
+        print("Docling model loaded successfully.")
     if config.LOAD_QWEN:
+        print("Loading Qwen model...")
         try:
             models['qwen'] = PDFOCRProcessor(ocr_backend='qwen')
+            print("Qwen model loaded successfully.")
         except RuntimeError as e:
             print(f"Failed to load Qwen model on startup: {e}")
     if config.LOAD_VARCO:
+        print("Loading Varco model...")
         models['varco'] = PDFOCRProcessor(ocr_backend='varco')
-    print(f"Models loaded: {list(models.keys())}")
+        print("Varco model loaded successfully.")
+
+    print("-" * 20)
+    print(f"Startup complete. Models loaded: {list(models.keys())}")
+    print("-" * 20)
 
 
 @app.get("/")
