@@ -59,7 +59,7 @@ async def ocr_image(
         llm_client = OpenAI(api_key=llm_api_key, base_url=llm_url)
 
     image = Image.open(io.BytesIO(await file.read()))
-    text, duration = processor.process_image(
+    result = processor.process_image(
         image,
         preprocess=preprocess,
         contrast=contrast,
@@ -68,7 +68,7 @@ async def ocr_image(
         llm_client=llm_client,
         llm_model_name=llm_model_name,
     )
-    return {"text": text, "duration": duration}
+    return result
 
 
 @app.post("/ocr/pdf")
@@ -110,7 +110,7 @@ async def ocr_pdf(
             llm_client=llm_client,
             llm_model_name=llm_model_name,
         )
-        return {"results": results}
+        return results
 
     finally:
         # Ensure the temporary file is always deleted
