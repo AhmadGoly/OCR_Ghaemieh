@@ -1,15 +1,23 @@
+print("Importing standard libraries...")
 import io
 import os
 import tempfile
-import torch
+from typing import List, Optional
+from contextlib import asynccontextmanager
+from enum import Enum
+
+print("Importing FastAPI and Pydantic...")
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Optional
+
+print("Importing imaging and ML libraries...")
+import torch
 from PIL import Image
 from openai import OpenAI
+
+print("Importing local modules...")
 from ocr import PDFOCRProcessor
 import config
-from enum import Enum
 
 # --- Enums for API Documentation ---
 
@@ -35,6 +43,7 @@ class PDFPageOCRResponse(BaseOCRResponse):
     page: int = Field(..., description="The page number of the processed page.")
 
 app = FastAPI(
+    lifespan=lifespan,
     title="OCR Processing API",
     description="""
 A powerful and flexible API for performing Optical Character Recognition (OCR) on images and PDF documents.
@@ -55,8 +64,8 @@ It also supports optional text enhancement using a configurable Large Language M
 # This dictionary will hold the globally shared instances of our processors.
 models = {}
 
-@app.on_event("startup")
-def load_models():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
     Load OCR models at application startup.
     This runs only once when the FastAPI app starts.
@@ -85,6 +94,8 @@ def load_models():
     print("-" * 20)
     print(f"Startup complete. Models loaded: {list(models.keys())}")
     print("-" * 20)
+    yield
+    # No cleanup needed, but yield is required for the context manager
 
 
 @app.get("/")
@@ -98,14 +109,14 @@ def read_root():
           response_model=ImageOCRResponse)
 async def ocr_image(
     file: UploadFile = File(..., description="The image file to be processed. Common formats like PNG, JPEG, and TIFF are supported."),
-    lang: str = Form(config.DEFAULT_LANG, description="The language(s) to be used for OCR, specified in Tesseract format (e.g., 'eng+fas').", example="eng+fas"),
+    lang: str = Form(config.DEFAULT_LANG, description="The language(s) to be used for OCR, specified in Tesseract format (e.g., 'eng+fas').", examples=["eng+fas"]),
     model: ModelName = Form(config.DEFAULT_MODEL, description="The OCR model to use for processing. Choose 'tesseract' or 'docling' for CPU-based processing, or 'qwen'/'varco' for GPU-accelerated models."),
     preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="If true, applies adaptive thresholding and morphological operations to clean up the image before OCR."),
     contrast: bool = Form(config.DEFAULT_CONTRAST, description="If true, enhances the image contrast, which can improve OCR accuracy on washed-out documents."),
     scale: float = Form(config.DEFAULT_SCALE, description="A scaling factor for the image. Values less than 1.0 will downscale, while values greater than 1.0 will upscale. A value of 1.0 means no change.", ge=0.1, le=5.0),
     use_llm: bool = Form(config.DEFAULT_USE_LLM, description="If true, a Large Language Model will be used to correct and enhance the raw OCR output."),
-    llm_url: str = Form(config.DEFAULT_LLM_URL, description="The base URL for the LLM API endpoint.", example="http://192.168.159.92:8080/v1"),
-    llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME, description="The specific name of the LLM to use for text enhancement.", example="gemma-3-4b-it-Q8_0"),
+    llm_url: str = Form(config.DEFAULT_LLM_URL, description="The base URL for the LLM API endpoint.", examples=["http://192.168.159.92:8080/v1"]),
+    llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME, description="The specific name of the LLM to use for text enhancement.", examples=["gemma-3-4b-it-Q8_0"]),
     llm_api_key: str = Form(config.DEFAULT_LLM_API_KEY, description="The API key for authenticating with the LLM service."),
 ):
     # Input validation
@@ -144,7 +155,7 @@ async def ocr_image(
           response_model=List[PDFPageOCRResponse])
 async def ocr_pdf(
     file: UploadFile = File(..., description="The PDF document to be processed."),
-    lang: str = Form(config.DEFAULT_LANG, description="The language(s) to be used for OCR, specified in Tesseract format (e.g., 'eng+fas').", example="eng+fas"),
+    lang: str = Form(config.DEFAULT_LANG, description="The language(s) to be used for OCR, specified in Tesseract format (e.g., 'eng+fas').", examples=["eng+fas"]),
     model: ModelName = Form(config.DEFAULT_MODEL, description="The OCR model to use for processing. Choose 'tesseract' or 'docling' for CPU-based processing, or 'qwen'/'varco' for GPU-accelerated models."),
     start_page: int = Form(1, description="The first page of the document to process (1-indexed).", gt=0),
     end_page: Optional[int] = Form(None, description="The last page of the document to process. If omitted, all pages from the start page to the end of the document will be processed.", gt=0),
@@ -152,8 +163,8 @@ async def ocr_pdf(
     contrast: bool = Form(config.DEFAULT_CONTRAST, description="If true, enhances the contrast of each page, which can improve OCR accuracy."),
     scale: float = Form(config.DEFAULT_SCALE, description="A scaling factor for each page's image. Values less than 1.0 will downscale, while values greater than 1.0 will upscale. A value of 1.0 means no change.", ge=0.1, le=5.0),
     use_llm: bool = Form(config.DEFAULT_USE_LLM, description="If true, a Large Language Model will be used to correct and enhance the raw OCR output for each page."),
-    llm_url: str = Form(config.DEFAULT_LLM_URL, description="The base URL for the LLM API endpoint.", example="http://192.168.159.92:8080/v1"),
-    llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME, description="The specific name of the LLM to use for text enhancement.", example="gemma-3-4b-it-Q8_0"),
+    llm_url: str = Form(config.DEFAULT_LLM_URL, description="The base URL for the LLM API endpoint.", examples=["http://192.168.159.92:8080/v1"]),
+    llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME, description="The specific name of the LLM to use for text enhancement.", examples=["gemma-3-4b-it-Q8_0"]),
     llm_api_key: str = Form(config.DEFAULT_LLM_API_KEY, description="The API key for authenticating with the LLM service."),
 ):
     # Input validation

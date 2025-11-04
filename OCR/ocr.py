@@ -1,7 +1,17 @@
+print("Importing standard libraries for OCR...")
 import os
 import tempfile
 import time
+from datetime import datetime
+from pathlib import Path
+
+print("Importing ML/AI libraries for OCR...")
 import torch
+from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, LlavaOnevisionForConditionalGeneration
+from openai import OpenAI
+from pydantic import BaseModel, Field
+
+print("Importing image processing libraries for OCR...")
 import cv2 as cv
 import numpy as np
 from PIL import Image
@@ -9,17 +19,14 @@ from pdf2image import convert_from_path
 import pytesseract
 import matplotlib.pyplot as plt
 import imutils
+
+print("Importing text and utility libraries for OCR...")
 import arabic_reshaper
 from bidi.algorithm import get_display
-from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, LlavaOnevisionForConditionalGeneration
 from qwen_vl_utils import process_vision_info
-from datetime import datetime
-from pathlib import Path
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractCliOcrOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
-from openai import OpenAI
-from pydantic import BaseModel, Field
 
 def log(msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
