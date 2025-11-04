@@ -16,6 +16,10 @@ LOAD_VARCO = False
 # FastAPI server configuration
 FASTAPI_PORT = 4567
 
+# Accepted values for endpoints
+ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco"]
+ACCEPTED_LANGUAGES = ["eng", "ara", "fas"]
+
 # Default endpoint parameters
 DEFAULT_LANG = "eng+ara+fas"
 DEFAULT_MODEL = "tesseract"

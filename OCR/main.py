@@ -51,6 +51,14 @@ async def ocr_image(
     llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME),
     llm_api_key: str = Form(config.DEFAULT_LLM_API_KEY),
 ):
+    # Input validation
+    if model not in config.ACCEPTED_MODELS:
+        raise HTTPException(status_code=400, detail=f"Invalid model '{model}'. Accepted models are: {config.ACCEPTED_MODELS}")
+
+    requested_langs = set(lang.split('+'))
+    if not requested_langs.issubset(config.ACCEPTED_LANGUAGES):
+        raise HTTPException(status_code=400, detail=f"Invalid languages provided. Accepted languages are: {config.ACCEPTED_LANGUAGES}")
+
     if model not in models:
         raise HTTPException(status_code=400, detail=f"Model '{model}' is not loaded or available.")
 
@@ -88,6 +96,14 @@ async def ocr_pdf(
     llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME),
     llm_api_key: str = Form(config.DEFAULT_LLM_API_KEY),
 ):
+    # Input validation
+    if model not in config.ACCEPTED_MODELS:
+        raise HTTPException(status_code=400, detail=f"Invalid model '{model}'. Accepted models are: {config.ACCEPTED_MODELS}")
+
+    requested_langs = set(lang.split('+'))
+    if not requested_langs.issubset(config.ACCEPTED_LANGUAGES):
+        raise HTTPException(status_code=400, detail=f"Invalid languages provided. Accepted languages are: {config.ACCEPTED_LANGUAGES}")
+
     if model not in models:
         raise HTTPException(status_code=400, detail=f"Model '{model}' is not loaded or available.")
 

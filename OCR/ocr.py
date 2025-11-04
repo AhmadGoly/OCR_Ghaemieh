@@ -46,10 +46,15 @@ class PDFOCRProcessor:
             if not torch.cuda.is_available():
                 raise RuntimeError("Qwen OCR requires a GPU, but none was detected.")
 
-            torch.cuda.empty_cache()
-            free_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1e9 - torch.cuda.memory_reserved(0) / 1e9
-            if free_memory_gb < 8:
-                raise RuntimeError(f"Qwen OCR requires at least 8GB of free GPU memory, but only {free_memory_gb:.2f}GB is available.")
+            import subprocess
+            try:
+                result = subprocess.run(['nvidia-smi', '--query-gpu=memory.free', '--format=csv,noheader,nounits'], stdout=subprocess.PIPE, text=True)
+                free_memory_mb = int(result.stdout.strip())
+                free_memory_gb = free_memory_mb / 1024
+                if free_memory_gb < 8:
+                    raise RuntimeError(f"Qwen OCR requires at least 8GB of free GPU memory, but only {free_memory_gb:.2f}GB is available.")
+            except (FileNotFoundError, ValueError, subprocess.CalledProcessError) as e:
+                raise RuntimeError(f"Failed to check GPU memory using nvidia-smi: {e}")
 
             log("Loading Qwen model and processor on GPU...")
             self.qwen_model = Qwen2VLForConditionalGeneration.from_pretrained(
