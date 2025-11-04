@@ -29,8 +29,7 @@ class PDFOCRProcessor:
                  qwen_model_name="NAMAA-Space/Qari-OCR-0.2.2.1-VL-2B-Instruct",
                  qwen_max_tokens=2000,
                  varco_model_name="NCSOFT/VARCO-VISION-2.0-1.7B-OCR",
-                 varco_max_tokens=1024,
-                 llm_props: list = None):
+                 varco_max_tokens=1024):
         self.lang = lang
         self.ocr_backend = ocr_backend
         self.qwen_model_name = qwen_model_name
@@ -41,23 +40,7 @@ class PDFOCRProcessor:
         self.qwen_processor = None
         self.varco_model = None
         self.varco_processor = None
-        self.llm_client = None
-        self.llm_model_name = None
         log("Initializing PDFOCRProcessor...")
-
-        # LLM setup
-        if llm_props and isinstance(llm_props, list) and len(llm_props) == 3:
-            try:
-                api_key, base_url, model_name = llm_props
-                self.llm_client = OpenAI(api_key=api_key, base_url=base_url)
-                self.llm_model_name = model_name
-                log("LLM initialized.")
-            except Exception as e:
-                log(f"Failed to initialize LLM: {e}")
-                self.llm_client = None
-                self.llm_model_name = None
-        else:
-            log("LLM properties not provided or invalid. LLM will not be used.")
 
         if self.ocr_backend == 'qwen':
             if not torch.cuda.is_available():
@@ -322,12 +305,6 @@ class PDFOCRProcessor:
             page_text = self.ocr_image(img, lang)
             ocr_duration = time.time() - start_t
             log(f"OCR completed in {ocr_duration:.2f} seconds")
-
-            if rewrite_llm and self.llm_client:
-                llm_start = time.time()
-                page_text = self.clean_ocr_text(self.llm_client, self.llm_model_name, page_text)
-                llm_duration = time.time() - llm_start
-                log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
 
             text[i] = page_text
 
