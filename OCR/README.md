@@ -10,17 +10,20 @@ This directory contains a FastAPI application for performing OCR on images and P
     pip install -r requirements.txt
     ```
 
-2.  **Configure Models**:
+2.  **Configure Application**:
 
-    Edit the `config.py` file to enable or disable the loading of different OCR models.
+    Edit the `config.py` file to:
+    *   Enable or disable the loading of different OCR models.
+    *   Set the FastAPI server port.
+    *   Configure the default values for the endpoint parameters.
 
 3.  **Run the Application**:
 
     ```bash
-    uvicorn main:app --reload
+    python main.py
     ```
 
-    The application will be available at `http://127.0.0.1:8000`.
+    The application will be available at the port specified in `config.py`.
 
 ## Endpoints
 

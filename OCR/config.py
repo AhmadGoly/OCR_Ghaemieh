@@ -12,3 +12,16 @@ LOAD_QWEN = True
 
 # Enable or disable loading of the Varco OCR model.
 LOAD_VARCO = False
+
+# FastAPI server configuration
+FASTAPI_PORT = 8000
+
+# Default endpoint parameters
+DEFAULT_MODEL = "tesseract"
+DEFAULT_PREPROCESS = False
+DEFAULT_CONTRAST = False
+DEFAULT_SCALE = 1.0
+DEFAULT_USE_LLM = True
+DEFAULT_LLM_URL = "http://192.168.159.92:8080/v1"
+DEFAULT_LLM_MODEL_NAME = "gemma-3-4b-it-Q8_0"
+DEFAULT_LLM_API_KEY = "your_dummy_or_real_key"
