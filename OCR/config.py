@@ -8,7 +8,7 @@ LOAD_DOCLING = True
 
 # Enable or disable loading of the Qwen OCR model.
 # This model requires a GPU with at least 8GB of free memory.
-LOAD_QWEN = True
+LOAD_QWEN = False
 
 # Enable or disable loading of the Varco OCR model.
 LOAD_VARCO = False
