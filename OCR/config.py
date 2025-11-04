@@ -14,7 +14,7 @@ LOAD_QWEN = False
 LOAD_VARCO = False
 
 # FastAPI server configuration
-FASTAPI_PORT = 8000
+FASTAPI_PORT = 4567
 
 # Default endpoint parameters
 DEFAULT_MODEL = "tesseract"
