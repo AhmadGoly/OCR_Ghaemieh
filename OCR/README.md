@@ -10,7 +10,15 @@ This directory contains a FastAPI application for performing OCR on images and P
     pip install -r requirements.txt
     ```
 
-2.  **Configure Application**:
+2.  **Download Tesseract Models**:
+
+    Run the following command to download the necessary language models for Tesseract. You may need to run this with `sudo` if you are installing the models in a system directory.
+
+    ```bash
+    python OCR/download_ocr_models.py
+    ```
+
+3.  **Configure Application**:
 
     Edit the `config.py` file to:
     *   Enable or disable the loading of different OCR models.

@@ -25,13 +25,12 @@ def log(msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 class PDFOCRProcessor:
-    def __init__(self, pdf_path, lang='eng+ara+fas', ocr_backend='tesseract',
+    def __init__(self, lang='eng+ara+fas', ocr_backend='tesseract',
                  qwen_model_name="NAMAA-Space/Qari-OCR-0.2.2.1-VL-2B-Instruct",
                  qwen_max_tokens=2000,
                  varco_model_name="NCSOFT/VARCO-VISION-2.0-1.7B-OCR",
                  varco_max_tokens=1024,
                  llm_props: list = None):
-        self.pdf_path = pdf_path
         self.lang = lang
         self.ocr_backend = ocr_backend
         self.qwen_model_name = qwen_model_name
@@ -262,8 +261,8 @@ class PDFOCRProcessor:
             return self._ocr_docling(pil_image, lang_list)
         return self._ocr_tesseract(pil_image, lang)
 
-    def clean_ocr_text(self, *ocr_outputs: str):
-        if not self.llm_client or not self.llm_model_name:
+    def clean_ocr_text(self, llm_client, llm_model_name, *ocr_outputs: str):
+        if not llm_client or not llm_model_name:
             log("LLM not initialized, cannot rewrite OCR text.")
             return ocr_outputs[0] if ocr_outputs else ""
         formatted_outputs = "\n".join(
@@ -287,8 +286,8 @@ class PDFOCRProcessor:
             },
             {"role": "user", "content": formatted_outputs}
         ]
-        completion = self.llm_client.chat.completions.parse(
-            model=self.llm_model_name,
+        completion = llm_client.chat.completions.parse(
+            model=llm_model_name,
             messages=messages,
             response_format=OCRCleanedText
         )
@@ -308,9 +307,9 @@ class PDFOCRProcessor:
         plt.axis("off")
         plt.show()
 
-    def process_demo(self, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, show=True, lang=None, rewrite_llm=False):
+    def process_demo(self, pdf_path, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, show=True, lang=None, rewrite_llm=False):
         log("Starting demo processing...")
-        images = convert_from_path(self.pdf_path, first_page=start_page, last_page=end_page)
+        images = convert_from_path(pdf_path, first_page=start_page, last_page=end_page)
         text = {}
         for i, image in enumerate(images, start=start_page):
             log(f"Processing page {i}...")
@@ -326,7 +325,7 @@ class PDFOCRProcessor:
 
             if rewrite_llm and self.llm_client:
                 llm_start = time.time()
-                page_text = self.clean_ocr_text(page_text)
+                page_text = self.clean_ocr_text(self.llm_client, self.llm_model_name, page_text)
                 llm_duration = time.time() - llm_start
                 log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
 
@@ -341,9 +340,9 @@ class PDFOCRProcessor:
         return text
 
 
-    def process(self, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, lang=None, rewrite_llm=False):
+    def process(self, pdf_path, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, lang=None, rewrite_llm=False, llm_client=None, llm_model_name=None):
         log("Starting batch processing...")
-        images = convert_from_path(self.pdf_path, first_page=start_page, last_page=end_page)
+        images = convert_from_path(pdf_path, first_page=start_page, last_page=end_page)
         results = []
 
         for i, image in enumerate(images, start=start_page):
@@ -358,9 +357,9 @@ class PDFOCRProcessor:
             ocr_duration = time.time() - start_t
             log(f"OCR completed in {ocr_duration:.2f} seconds")
 
-            if rewrite_llm and self.llm_client:
+            if rewrite_llm and llm_client:
                 llm_start = time.time()
-                page_text = self.clean_ocr_text(page_text)
+                page_text = self.clean_ocr_text(llm_client, llm_model_name, page_text)
                 llm_duration = time.time() - llm_start
                 log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
 
@@ -370,7 +369,7 @@ class PDFOCRProcessor:
         log("Batch processing completed.")
         return results
 
-    def process_image(self, image, preprocess=False, contrast=False, scale=1.0, lang=None, rewrite_llm=False):
+    def process_image(self, image, preprocess=False, contrast=False, scale=1.0, lang=None, rewrite_llm=False, llm_client=None, llm_model_name=None):
         log("Starting image processing...")
         img = image
         if preprocess: img = self.preprocess_page(img)
@@ -382,9 +381,9 @@ class PDFOCRProcessor:
         ocr_duration = time.time() - start_t
         log(f"OCR completed in {ocr_duration:.2f} seconds")
 
-        if rewrite_llm and self.llm_client:
+        if rewrite_llm and llm_client:
             llm_start = time.time()
-            page_text = self.clean_ocr_text(page_text)
+            page_text = self.clean_ocr_text(llm_client, llm_model_name, page_text)
             llm_duration = time.time() - llm_start
             log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
 

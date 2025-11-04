@@ -20,16 +20,16 @@ def load_models():
     This runs only once when the FastAPI app starts.
     """
     if config.LOAD_TESSERACT:
-        models['tesseract'] = PDFOCRProcessor(pdf_path=None, ocr_backend='tesseract')
+        models['tesseract'] = PDFOCRProcessor(ocr_backend='tesseract')
     if config.LOAD_DOCLING:
-        models['docling'] = PDFOCRProcessor(pdf_path=None, ocr_backend='docling')
+        models['docling'] = PDFOCRProcessor(ocr_backend='docling')
     if config.LOAD_QWEN:
         try:
-            models['qwen'] = PDFOCRProcessor(pdf_path=None, ocr_backend='qwen')
+            models['qwen'] = PDFOCRProcessor(ocr_backend='qwen')
         except RuntimeError as e:
             print(f"Failed to load Qwen model on startup: {e}")
     if config.LOAD_VARCO:
-        models['varco'] = PDFOCRProcessor(pdf_path=None, ocr_backend='varco')
+        models['varco'] = PDFOCRProcessor(ocr_backend='varco')
     print(f"Models loaded: {list(models.keys())}")
 
 
@@ -54,31 +54,21 @@ async def ocr_image(
         raise HTTPException(status_code=400, detail=f"Model '{model}' is not loaded or available.")
 
     processor = models[model]
-    original_llm_client = processor.llm_client
-    original_llm_model_name = processor.llm_model_name
+    llm_client = None
+    if use_llm:
+        llm_client = OpenAI(api_key=llm_api_key, base_url=llm_url)
 
-    try:
-        if use_llm:
-            processor.llm_client = OpenAI(api_key=llm_api_key, base_url=llm_url)
-            processor.llm_model_name = llm_model_name
-        else:
-            processor.llm_client = None
-            processor.llm_model_name = None
-
-        image = Image.open(io.BytesIO(await file.read()))
-        text, duration = processor.process_image(
-            image,
-            preprocess=preprocess,
-            contrast=contrast,
-            scale=scale,
-            rewrite_llm=use_llm,
-        )
-        return {"text": text, "duration": duration}
-
-    finally:
-        # Restore the original state of the processor
-        processor.llm_client = original_llm_client
-        processor.llm_model_name = original_llm_model_name
+    image = Image.open(io.BytesIO(await file.read()))
+    text, duration = processor.process_image(
+        image,
+        preprocess=preprocess,
+        contrast=contrast,
+        scale=scale,
+        rewrite_llm=use_llm,
+        llm_client=llm_client,
+        llm_model_name=llm_model_name,
+    )
+    return {"text": text, "duration": duration}
 
 
 @app.post("/ocr/pdf")
@@ -99,8 +89,9 @@ async def ocr_pdf(
         raise HTTPException(status_code=400, detail=f"Model '{model}' is not loaded or available.")
 
     processor = models[model]
-    original_llm_client = processor.llm_client
-    original_llm_model_name = processor.llm_model_name
+    llm_client = None
+    if use_llm:
+        llm_client = OpenAI(api_key=llm_api_key, base_url=llm_url)
 
     # Create a temporary file to store the PDF
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
@@ -108,30 +99,22 @@ async def ocr_pdf(
         pdf_path = tmp_file.name
 
     try:
-        if use_llm:
-            processor.llm_client = OpenAI(api_key=llm_api_key, base_url=llm_url)
-            processor.llm_model_name = llm_model_name
-        else:
-            processor.llm_client = None
-            processor.llm_model_name = None
-
-        processor.pdf_path = pdf_path
         results = processor.process(
+            pdf_path=pdf_path,
             start_page=start_page,
             end_page=end_page,
             preprocess=preprocess,
             contrast=contrast,
             scale=scale,
             rewrite_llm=use_llm,
+            llm_client=llm_client,
+            llm_model_name=llm_model_name,
         )
         return {"results": results}
 
     finally:
         # Ensure the temporary file is always deleted
         os.unlink(pdf_path)
-        # Restore the original state of the processor
-        processor.llm_client = original_llm_client
-        processor.llm_model_name = original_llm_model_name
 
 
 @app.get("/health/models")
