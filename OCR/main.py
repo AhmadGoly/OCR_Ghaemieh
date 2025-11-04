@@ -3,12 +3,54 @@ import os
 import tempfile
 import torch
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from pydantic import BaseModel, Field
+from typing import List, Optional
 from PIL import Image
 from openai import OpenAI
 from ocr import PDFOCRProcessor
 import config
+from enum import Enum
 
-app = FastAPI()
+# --- Enums for API Documentation ---
+
+class ModelName(str, Enum):
+    tesseract = "tesseract"
+    docling = "docling"
+    qwen = "qwen"
+    varco = "varco"
+
+# --- Pydantic Models for API Documentation ---
+
+class BaseOCRResponse(BaseModel):
+    text: str = Field(..., description="The extracted OCR text from the image or page.")
+    ocr_model: str = Field(..., description="The name of the OCR model used for processing.")
+    ocr_duration: float = Field(..., description="The time taken for the OCR process in seconds.")
+    llm_model: Optional[str] = Field(None, description="The name of the Language Model used for text enhancement, if any.")
+    llm_duration: float = Field(..., description="The time taken for the LLM enhancement in seconds. A value of -1 indicates that the LLM was not used.")
+
+class ImageOCRResponse(BaseOCRResponse):
+    pass
+
+class PDFPageOCRResponse(BaseOCRResponse):
+    page: int = Field(..., description="The page number of the processed page.")
+
+app = FastAPI(
+    title="OCR Processing API",
+    description="""
+A powerful and flexible API for performing Optical Character Recognition (OCR) on images and PDF documents.
+
+This API provides endpoints to process files using various OCR backends, including **Tesseract**, **Docling**, and GPU-accelerated models like **Qwen** and **Varco**.
+It also supports optional text enhancement using a configurable Large Language Model (LLM).
+
+### Features:
+-   **Image and PDF Processing**: Endpoints for both single image files and multi-page PDF documents.
+-   **Configurable OCR Backends**: Choose the best model for your needs on a per-request basis.
+-   **Image Preprocessing**: Options to enable preprocessing, contrast enhancement, and scaling to improve OCR accuracy.
+-   **LLM-Powered Text Correction**: Optionally use a language model to correct and clean up the raw OCR output.
+-   **Detailed Responses**: Get structured JSON responses with the extracted text, model information, and performance metrics.
+    """,
+    version="1.0.0",
+)
 
 # This dictionary will hold the globally shared instances of our processors.
 models = {}
@@ -50,31 +92,34 @@ def read_root():
     return {"message": "Welcome to the OCR API"}
 
 
-@app.post("/ocr/image")
+@app.post("/ocr/image",
+          summary="Perform OCR on a Single Image",
+          description="Upload an image file to extract text content. This endpoint is ideal for processing single-page documents, photographs of text, or screenshots.",
+          response_model=ImageOCRResponse)
 async def ocr_image(
-    file: UploadFile = File(...),
-    lang: str = Form(config.DEFAULT_LANG),
-    model: str = Form(config.DEFAULT_MODEL),
-    preprocess: bool = Form(config.DEFAULT_PREPROCESS),
-    contrast: bool = Form(config.DEFAULT_CONTRAST),
-    scale: float = Form(config.DEFAULT_SCALE),
-    use_llm: bool = Form(config.DEFAULT_USE_LLM),
-    llm_url: str = Form(config.DEFAULT_LLM_URL),
-    llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME),
-    llm_api_key: str = Form(config.DEFAULT_LLM_API_KEY),
+    file: UploadFile = File(..., description="The image file to be processed. Common formats like PNG, JPEG, and TIFF are supported."),
+    lang: str = Form(config.DEFAULT_LANG, description="The language(s) to be used for OCR, specified in Tesseract format (e.g., 'eng+fas').", example="eng+fas"),
+    model: ModelName = Form(config.DEFAULT_MODEL, description="The OCR model to use for processing. Choose 'tesseract' or 'docling' for CPU-based processing, or 'qwen'/'varco' for GPU-accelerated models."),
+    preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="If true, applies adaptive thresholding and morphological operations to clean up the image before OCR."),
+    contrast: bool = Form(config.DEFAULT_CONTRAST, description="If true, enhances the image contrast, which can improve OCR accuracy on washed-out documents."),
+    scale: float = Form(config.DEFAULT_SCALE, description="A scaling factor for the image. Values less than 1.0 will downscale, while values greater than 1.0 will upscale. A value of 1.0 means no change.", ge=0.1, le=5.0),
+    use_llm: bool = Form(config.DEFAULT_USE_LLM, description="If true, a Large Language Model will be used to correct and enhance the raw OCR output."),
+    llm_url: str = Form(config.DEFAULT_LLM_URL, description="The base URL for the LLM API endpoint.", example="http://192.168.159.92:8080/v1"),
+    llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME, description="The specific name of the LLM to use for text enhancement.", example="gemma-3-4b-it-Q8_0"),
+    llm_api_key: str = Form(config.DEFAULT_LLM_API_KEY, description="The API key for authenticating with the LLM service."),
 ):
     # Input validation
-    if model not in config.ACCEPTED_MODELS:
+    if model.value not in config.ACCEPTED_MODELS:
         raise HTTPException(status_code=400, detail=f"Invalid model '{model}'. Accepted models are: {config.ACCEPTED_MODELS}")
 
     requested_langs = set(lang.split('+'))
     if not requested_langs.issubset(config.ACCEPTED_LANGUAGES):
         raise HTTPException(status_code=400, detail=f"Invalid languages provided. Accepted languages are: {config.ACCEPTED_LANGUAGES}")
 
-    if model not in models:
-        raise HTTPException(status_code=400, detail=f"Model '{model}' is not loaded or available.")
+    if model.value not in models:
+        raise HTTPException(status_code=400, detail=f"Model '{model.value}' is not loaded or available. Check the `config.py` file to enable it.")
 
-    processor = models[model]
+    processor = models[model.value]
     llm_client = None
     if use_llm:
         llm_client = OpenAI(api_key=llm_api_key, base_url=llm_url)
@@ -93,33 +138,36 @@ async def ocr_image(
     return result
 
 
-@app.post("/ocr/pdf")
+@app.post("/ocr/pdf",
+          summary="Perform OCR on a PDF Document",
+          description="Upload a PDF file to extract text content from a specified range of pages. This is suitable for multi-page documents.",
+          response_model=List[PDFPageOCRResponse])
 async def ocr_pdf(
-    file: UploadFile = File(...),
-    lang: str = Form(config.DEFAULT_LANG),
-    model: str = Form(config.DEFAULT_MODEL),
-    start_page: int = Form(1),
-    end_page: int = Form(None),
-    preprocess: bool = Form(config.DEFAULT_PREPROCESS),
-    contrast: bool = Form(config.DEFAULT_CONTRAST),
-    scale: float = Form(config.DEFAULT_SCALE),
-    use_llm: bool = Form(config.DEFAULT_USE_LLM),
-    llm_url: str = Form(config.DEFAULT_LLM_URL),
-    llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME),
-    llm_api_key: str = Form(config.DEFAULT_LLM_API_KEY),
+    file: UploadFile = File(..., description="The PDF document to be processed."),
+    lang: str = Form(config.DEFAULT_LANG, description="The language(s) to be used for OCR, specified in Tesseract format (e.g., 'eng+fas').", example="eng+fas"),
+    model: ModelName = Form(config.DEFAULT_MODEL, description="The OCR model to use for processing. Choose 'tesseract' or 'docling' for CPU-based processing, or 'qwen'/'varco' for GPU-accelerated models."),
+    start_page: int = Form(1, description="The first page of the document to process (1-indexed).", gt=0),
+    end_page: Optional[int] = Form(None, description="The last page of the document to process. If omitted, all pages from the start page to the end of the document will be processed.", gt=0),
+    preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="If true, applies adaptive thresholding and morphological operations to clean up each page's image before OCR."),
+    contrast: bool = Form(config.DEFAULT_CONTRAST, description="If true, enhances the contrast of each page, which can improve OCR accuracy."),
+    scale: float = Form(config.DEFAULT_SCALE, description="A scaling factor for each page's image. Values less than 1.0 will downscale, while values greater than 1.0 will upscale. A value of 1.0 means no change.", ge=0.1, le=5.0),
+    use_llm: bool = Form(config.DEFAULT_USE_LLM, description="If true, a Large Language Model will be used to correct and enhance the raw OCR output for each page."),
+    llm_url: str = Form(config.DEFAULT_LLM_URL, description="The base URL for the LLM API endpoint.", example="http://192.168.159.92:8080/v1"),
+    llm_model_name: str = Form(config.DEFAULT_LLM_MODEL_NAME, description="The specific name of the LLM to use for text enhancement.", example="gemma-3-4b-it-Q8_0"),
+    llm_api_key: str = Form(config.DEFAULT_LLM_API_KEY, description="The API key for authenticating with the LLM service."),
 ):
     # Input validation
-    if model not in config.ACCEPTED_MODELS:
+    if model.value not in config.ACCEPTED_MODELS:
         raise HTTPException(status_code=400, detail=f"Invalid model '{model}'. Accepted models are: {config.ACCEPTED_MODELS}")
 
     requested_langs = set(lang.split('+'))
     if not requested_langs.issubset(config.ACCEPTED_LANGUAGES):
         raise HTTPException(status_code=400, detail=f"Invalid languages provided. Accepted languages are: {config.ACCEPTED_LANGUAGES}")
 
-    if model not in models:
-        raise HTTPException(status_code=400, detail=f"Model '{model}' is not loaded or available.")
+    if model.value not in models:
+        raise HTTPException(status_code=400, detail=f"Model '{model.value}' is not loaded or available. Check the `config.py` file to enable it.")
 
-    processor = models[model]
+    processor = models[model.value]
     llm_client = None
     if use_llm:
         llm_client = OpenAI(api_key=llm_api_key, base_url=llm_url)
