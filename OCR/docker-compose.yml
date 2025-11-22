@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  ocr:
+    image: ghaemieh-ocr:11.22.2025
+    container_name: ghaemieh-ocr
+    working_dir: /app
+    command: python main.py
+    ports:
+      - "4567:4567"
+    environment:
+      FASTAPI_PORT: 4567
+      DEFAULT_LLM_URL: "http://192.168.159.92:8080/v1"
+      DEFAULT_LLM_MODEL_NAME: "gemma-3-4b-it-Q8_0"
+      DEFAULT_LLM_API_KEY: "your_dummy_or_real_key"
+      DEFAULT_USE_LLM: "True"
+    volumes:
+      - ./:/app

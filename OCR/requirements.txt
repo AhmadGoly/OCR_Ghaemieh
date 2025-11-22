@@ -11,3 +11,5 @@ docling
 python-multipart
 fastapi
 uvicorn
+openai
+# docker
