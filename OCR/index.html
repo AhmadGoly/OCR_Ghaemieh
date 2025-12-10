@@ -41,7 +41,10 @@
                 <option value="qwen">Qwen (GPU)</option>
                 <option value="varco">Varco (GPU)</option>
               </select>
-              <span class="hint">انتخاب مدل پردازش متن</span>
+              <span class="hint"
+                >انتخاب مدل پردازش متن برای استخراج دقیق‌تر. مدل‌ها شامل CPU و
+                GPU هستند. این گزینه سرعت و دقت OCR را تعیین می‌کند.</span
+              >
             </div>
 
             <div class="option">
@@ -54,7 +57,11 @@
                 <option value="eng+ara">انگلیسی + عربی</option>
                 <option value="eng+ara+fas">انگلیسی + عربی + فارسی</option>
               </select>
-              <span class="hint">انتخاب زبان‌های موجود در فایل</span>
+              <span class="hint"
+                >انتخاب زبان‌های موجود در فایل برای OCR. این گزینه به مدل کمک
+                می‌کند تا کاراکترها و حروف را درست تشخیص دهد. مناسب برای اسناد
+                چندزبانه است.</span
+              >
             </div>
 
             <div class="option toggle-option">
@@ -63,7 +70,11 @@
                 <input type="checkbox" id="preprocess-toggle" />
                 <span class="slider round"></span>
               </label>
-              <span class="hint">بهبود کیفیت تصویر قبل از OCR</span>
+              <span class="hint"
+                >قبل از OCR تصویر تمیز می‌شود و نویز کاهش می‌یابد. این باعث
+                می‌شود متن واضح‌تر شود و شناسایی آسان‌تر شود. کیفیت نهایی OCR
+                بالاتر می‌رود.</span
+              >
             </div>
 
             <div class="option toggle-option">
@@ -72,7 +83,11 @@
                 <input type="checkbox" id="contrast-toggle" />
                 <span class="slider round"></span>
               </label>
-              <span class="hint">افزایش وضوح متن</span>
+              <span class="hint"
+                >روشنایی و تاریکی تصویر تنظیم می‌شود تا متن واضح‌تر شود. بخش‌های
+                محو خواناتر می‌شوند و دقت OCR افزایش می‌یابد. متن به صورت واضح و
+                قابل خواندن استخراج می‌شود.</span
+              >
             </div>
 
             <div class="option toggle-option">
@@ -81,7 +96,11 @@
                 <input type="checkbox" id="llm-toggle" checked />
                 <span class="slider round"></span>
               </label>
-              <span class="hint">بازنویسی و تصحیح متن با مدل زبانی</span>
+              <span class="hint"
+                >متن استخراج شده توسط OCR بررسی و اصلاح می‌شود. اشتباهات رایج
+                تصحیح می‌شوند و متن طبیعی‌تر می‌شود. خروجی تمیز و روان ارائه
+                می‌شود.</span
+              >
             </div>
 
             <div class="option range-option">
@@ -95,7 +114,11 @@
                 value="1.0"
               />
               <span id="scale-value">1.0</span>
-              <span class="hint">بزرگ‌نمایی تصویر برای OCR</span>
+              <span class="hint"
+                >اندازه تصویر تغییر می‌کند تا متن ریز راحت‌تر شناسایی شود. مقیاس
+                مناسب دقت و سرعت OCR را بهینه می‌کند. این گزینه برای کیفیت و
+                عملکرد بهتر مفید است.</span
+              >
             </div>
 
             <div class="option page-range-option">
@@ -114,7 +137,11 @@
                   min="1"
                 />
               </div>
-              <span class="hint">انتخاب صفحات مورد نظر برای پردازش</span>
+              <span class="hint"
+                >انتخاب صفحات مورد نظر برای پردازش. این گزینه اجازه می‌دهد فقط
+                بخشی از PDF پردازش شود. مناسب برای فایل‌های چندصفحه‌ای
+                است.</span
+              >
             </div>
           </div>
 
