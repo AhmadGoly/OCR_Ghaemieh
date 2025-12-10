@@ -98,17 +98,20 @@ It also supports optional text enhancement using a configurable Large Language M
     version="1.0.0",
 )
 
+# Get the absolute path to the directory containing main.py
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 @app.get("/", include_in_schema=False)
 async def read_index():
-    return FileResponse('index.html')
+    return FileResponse(os.path.join(BASE_DIR, 'index.html'))
 
 @app.get("/style.css", include_in_schema=False)
 async def read_style():
-    return FileResponse('style.css')
+    return FileResponse(os.path.join(BASE_DIR, 'style.css'))
 
 @app.get("/script.js", include_in_schema=False)
 async def read_script():
-    return FileResponse('script.js')
+    return FileResponse(os.path.join(BASE_DIR, 'script.js'))
 
 
 @app.post("/ocr/image",
