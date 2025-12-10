@@ -1,0 +1,27 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    poppler-utils \
+    libgl1 \
+    libglx-mesa0 \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir fastapi uvicorn pdf2image python-bidi arabic-reshaper
+RUN pip install --no-cache-dir transformers
+RUN pip install --no-cache-dir pytesseract
+RUN pip install --no-cache-dir docling
+RUN pip install --no-cache-dir qwen_vl_utils
+RUN pip install --no-cache-dir \
+        "accelerate>=0.26.0" \
+        peft \
+        bitsandbytes \
+        python-multipart 
+
+RUN pip install openai
+RUN pip install imutils matplotlib
+COPY ./download_ocr_models.py .
+RUN python download_ocr_models.py && rm download_ocr_models.py

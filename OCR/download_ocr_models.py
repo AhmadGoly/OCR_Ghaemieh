@@ -1,6 +1,6 @@
 import os
 
-langs = ["eng", "ara", "fas"]
+langs = ["eng", "ara", "fas","osd"]
 tessdata_path = "/usr/share/tesseract-ocr/4.00/tessdata/"
 
 def download_models():
