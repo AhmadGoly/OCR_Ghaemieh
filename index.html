@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR فارسی</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>سرویس استخراج متن از تصاویر و PDF</h1>
+        <p>فایل خود را آپلود کنید تا متن آن استخراج شود</p>
+    </header>
+
+    <main>
+        <div class="container">
+            <div id="upload-area" class="upload-area">
+                <div class="upload-area-content">
+                    <p>فایل خود را اینجا بکشید و رها کنید یا</p>
+                    <button id="file-browser-button" class="button">انتخاب فایل</button>
+                    <input type="file" id="file-input" hidden accept=".pdf,.png,.jpg,.jpeg,.tiff">
+                </div>
+            </div>
+
+            <div class="options-container">
+                <h2>تنظیمات</h2>
+                <div class="options-grid">
+                    <div class="option">
+                        <label for="model-select">مدل OCR:</label>
+                        <select id="model-select" class="select">
+                            <option value="tesseract">Tesseract</option>
+                            <option value="docling">Docling</option>
+                            <option value="qwen">Qwen (GPU)</option>
+                            <option value="varco">Varco (GPU)</option>
+                        </select>
+                    </div>
+                    <div class="option">
+                        <label for="lang-select">زبان:</label>
+                        <select id="lang-select" class="select">
+                            <option value="fas">فارسی</option>
+                            <option value="eng">انگلیسی</option>
+                            <option value="ara">عربی</option>
+                            <option value="eng+fas">انگلیسی + فارسی</option>
+                            <option value="eng+ara">انگلیسی + عربی</option>
+                            <option value="eng+ara+fas">انگلیسی + عربی + فارسی</option>
+                        </select>
+                    </div>
+                    <div class="option toggle-option">
+                        <label for="preprocess-toggle">پیش‌پردازش:</label>
+                        <label class="switch">
+                            <input type="checkbox" id="preprocess-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="option toggle-option">
+                        <label for="contrast-toggle">افزایش کنتراست:</label>
+                        <label class="switch">
+                            <input type="checkbox" id="contrast-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                     <div class="option toggle-option">
+                        <label for="llm-toggle">بهبود با LLM:</label>
+                        <label class="switch">
+                            <input type="checkbox" id="llm-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="option range-option">
+                        <label for="scale-slider">مقیاس تصویر:</label>
+                        <input type="range" id="scale-slider" min="0.1" max="5.0" step="0.1" value="1.0">
+                        <span id="scale-value">1.0</span>
+                    </div>
+                    <div class="option page-range-option">
+                        <label>محدوده صفحات (برای PDF):</label>
+                        <div class="page-inputs">
+                            <input type="number" id="start-page" placeholder="شروع" min="1">
+                            <input type="number" id="end-page" placeholder="پایان" min="1">
+                        </div>
+                    </div>
+                </div>
+                <button id="submit-button" class="button primary-button" disabled>ارسال</button>
+            </div>
+
+            <div id="results-area" class="results-area" hidden>
+                <h2>نتایج استخراج</h2>
+                <div class="results-actions">
+                    <button id="copy-button" class="button">کپی متن</button>
+                    <button id="download-button" class="button">دانلود متن</button>
+                </div>
+                <pre id="ocr-output"></pre>
+            </div>
+
+            <div id="loading-indicator" class="loading-indicator" hidden>
+                <div class="spinner"></div>
+                <p>در حال پردازش... لطفاً منتظر بمانید.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>ساخته شده با ❤️</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

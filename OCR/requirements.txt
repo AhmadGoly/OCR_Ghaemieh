@@ -12,4 +12,5 @@ python-multipart
 fastapi
 uvicorn
 openai
-# docker
+# dockermatplotlib
+imutils
