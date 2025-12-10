@@ -8,6 +8,7 @@ from enum import Enum
 
 print("Importing FastAPI and Pydantic...")
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 print("Importing imaging and ML libraries...")
@@ -97,9 +98,17 @@ It also supports optional text enhancement using a configurable Large Language M
     version="1.0.0",
 )
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the OCR API"}
+@app.get("/", include_in_schema=False)
+async def read_index():
+    return FileResponse('index.html')
+
+@app.get("/style.css", include_in_schema=False)
+async def read_style():
+    return FileResponse('style.css')
+
+@app.get("/script.js", include_in_schema=False)
+async def read_script():
+    return FileResponse('script.js')
 
 
 @app.post("/ocr/image",
