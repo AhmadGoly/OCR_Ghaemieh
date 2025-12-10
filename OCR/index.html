@@ -67,7 +67,7 @@
             <div class="option toggle-option">
               <label for="preprocess-toggle">پیش‌پردازش:</label>
               <label class="switch">
-                <input type="checkbox" id="preprocess-toggle" />
+                <input type="checkbox" id="preprocess-toggle" checked />
                 <span class="slider round"></span>
               </label>
               <span class="hint"
@@ -93,7 +93,7 @@
             <div class="option toggle-option">
               <label for="llm-toggle">بهبود با LLM:</label>
               <label class="switch">
-                <input type="checkbox" id="llm-toggle" checked />
+                <input type="checkbox" id="llm-toggle" />
                 <span class="slider round"></span>
               </label>
               <span class="hint"
@@ -160,7 +160,14 @@
         </div>
 
         <div id="loading-indicator" class="loading-indicator" hidden>
-          <div class="spinner"></div>
+          <div class="book">
+            <div class="book__pg-shadow"></div>
+            <div class="book__pg book__pg--1"></div>
+            <div class="book__pg book__pg--2"></div>
+            <div class="book__pg book__pg--3"></div>
+            <div class="book__pg book__pg--4"></div>
+            <div class="book__pg book__pg--5"></div>
+          </div>
           <p>در حال پردازش... لطفاً منتظر بمانید.</p>
         </div>
       </div>
