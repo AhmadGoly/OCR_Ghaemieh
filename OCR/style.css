@@ -260,10 +260,10 @@ input:checked + .slider:before {
 }
 
 .book {
-  background-color: hsl(268, 90%, 65%);
+  background-color: hsl(200, 80%, 70%);
   border-radius: 0.25em;
   box-shadow: 0 0.25em 0.5em hsla(0, 0%, 0%, 0.3),
-    0 0 0 0.25em hsl(278, 100%, 57%) inset;
+    0 0 0 0.25em hsl(200, 75%, 66%) inset;
   padding: 0.25em;
   perspective: 37.5em;
   position: relative;
@@ -341,14 +341,14 @@ input:checked + .slider:before {
   55%,
   95%,
   100% {
-    background-color: hsl(278, 84%, 67%);
+    background-color: hsl(200, 80%, 60%);
     animation-timing-function: ease-out;
   }
   10%,
   40%,
   60%,
   90% {
-    background-color: hsl(271, 90%, 45%);
+    background-color: hsl(200, 80%, 50%);
     animation-timing-function: ease-in;
   }
 }
