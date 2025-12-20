@@ -27,6 +27,7 @@ from qwen_vl_utils import process_vision_info
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractCliOcrOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
+import config
 
 def log(msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
@@ -83,6 +84,23 @@ class PDFOCRProcessor:
         if len(img.shape) == 3 and img.shape[2] == 3:
             return cv.cvtColor(img, cv.COLOR_RGB2GRAY)
         return img
+
+    def crop_whitespaces(self, pil_image, threshold=config.CROP_WHITESPACE_THRESHOLD):
+        log("Cropping whitespaces...")
+        img = np.array(pil_image)
+        if len(img.shape) == 3 and img.shape[2] == 3:
+            img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+
+        _, thresh = cv.threshold(img, threshold, 255, cv.THRESH_BINARY_INV)
+        coords = cv.findNonZero(thresh)
+        if coords is None:
+            log("No content found to crop to, returning original image.")
+            return pil_image
+
+        x, y, w, h = cv.boundingRect(coords)
+        cropped = img[y:y+h, x:x+w]
+        log("Whitespace cropping done.")
+        return Image.fromarray(cropped)
 
     def preprocess_page(self, pil_image):
         log("Preprocessing page...")
@@ -306,7 +324,7 @@ class PDFOCRProcessor:
         plt.axis("off")
         plt.show()
 
-    def process_demo(self, pdf_path, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, show=True, lang=None, rewrite_llm=False):
+    def process_demo(self, pdf_path, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, crop_whitespaces=False, show=True, lang=None, rewrite_llm=False):
         log("Starting demo processing...")
         images = convert_from_path(pdf_path, first_page=start_page, last_page=end_page)
         text = {}
@@ -316,6 +334,7 @@ class PDFOCRProcessor:
             if preprocess: img = self.preprocess_page(img)
             if contrast: img = self.enhance_contrast(img)
             if scale != 1.0: img = self.rescale_image(img, scale)
+            if crop_whitespaces: img = self.crop_whitespaces(img)
 
             start_t = time.time()
             page_text = self.ocr_image(img, lang)
@@ -333,7 +352,7 @@ class PDFOCRProcessor:
         return text
 
 
-    def process(self, pdf_path, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, lang=None, rewrite_llm=False, llm_client=None, llm_model_name=None):
+    def process(self, pdf_path, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, crop_whitespaces=False, lang=None, rewrite_llm=False, llm_client=None, llm_model_name=None):
         log("Starting batch processing...")
         images = convert_from_path(pdf_path, first_page=start_page, last_page=end_page)
         results = []
@@ -344,6 +363,7 @@ class PDFOCRProcessor:
             if preprocess: img = self.preprocess_page(img)
             if contrast: img = self.enhance_contrast(img)
             if scale != 1.0: img = self.rescale_image(img, scale)
+            if crop_whitespaces: img = self.crop_whitespaces(img)
 
             start_t = time.time()
             page_text = self.ocr_image(img, lang)
@@ -370,12 +390,13 @@ class PDFOCRProcessor:
         log("Batch processing completed.")
         return results
 
-    def process_image(self, image, preprocess=False, contrast=False, scale=1.0, lang=None, rewrite_llm=False, llm_client=None, llm_model_name=None):
+    def process_image(self, image, preprocess=False, contrast=False, scale=1.0, crop_whitespaces=False, lang=None, rewrite_llm=False, llm_client=None, llm_model_name=None):
         log("Starting image processing...")
         img = image
         if preprocess: img = self.preprocess_page(img)
         if contrast: img = self.enhance_contrast(img)
         if scale != 1.0: img = self.rescale_image(img, scale)
+        if crop_whitespaces: img = self.crop_whitespaces(img)
 
         start_t = time.time()
         page_text = self.ocr_image(img, lang)
