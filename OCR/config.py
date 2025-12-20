@@ -1,3 +1,5 @@
+import os
+
 # OCR Model Loading Configuration
 
 # Enable or disable loading of the Tesseract OCR model.
@@ -30,3 +32,6 @@ DEFAULT_USE_LLM = False
 DEFAULT_LLM_URL = "http://192.168.159.92:8080/v1"
 DEFAULT_LLM_MODEL_NAME = "gemma-3-4b-it-Q8_0"
 DEFAULT_LLM_API_KEY = "your_dummy_or_real_key"
+
+# Whitespace cropping threshold
+CROP_WHITESPACE_THRESHOLD = int(os.environ.get("CROP_WHITESPACE_THRESHOLD", 250))

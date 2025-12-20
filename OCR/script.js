@@ -94,6 +94,10 @@ document.addEventListener("DOMContentLoaded", () => {
       "contrast",
       document.getElementById("contrast-toggle").checked
     );
+    formData.append(
+      "crop_whitespaces",
+      document.getElementById("crop-toggle").checked
+    );
     formData.append("scale", scaleSlider.value);
     formData.append("use_llm", document.getElementById("llm-toggle").checked);
 
