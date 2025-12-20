@@ -7,13 +7,13 @@ services:
     working_dir: /app
     command: python main.py
     ports:
-      - "4567:4567"
+      - "3334:4567"
     environment:
       FASTAPI_PORT: 4567
-      DEFAULT_LLM_URL: "http://192.168.159.92:8080/v1"
+      DEFAULT_LLM_URL: "http://localhost:8080/v1"
       DEFAULT_LLM_MODEL_NAME: "gemma-3-4b-it-Q8_0"
       DEFAULT_LLM_API_KEY: "your_dummy_or_real_key"
-      DEFAULT_USE_LLM: "True"
+      DEFAULT_USE_LLM: "False"
       TESSDATA_PREFIX: "/usr/share/tesseract-ocr/4.00/tessdata/"
     volumes:
       - ./:/app
