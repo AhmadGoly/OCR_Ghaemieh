@@ -1,4 +1,6 @@
 print("Importing standard libraries for OCR...")
+import base64
+import io
 import os
 import tempfile
 import time
@@ -84,6 +86,12 @@ class PDFOCRProcessor:
         if len(img.shape) == 3 and img.shape[2] == 3:
             return cv.cvtColor(img, cv.COLOR_RGB2GRAY)
         return img
+
+    def _image_to_base64(self, pil_image):
+        """Converts a PIL image to a base64 encoded string."""
+        buffered = io.BytesIO()
+        pil_image.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode()
 
     def crop_whitespaces(self, pil_image, threshold=config.CROP_WHITESPACE_THRESHOLD):
         log("Cropping whitespaces...")
@@ -392,23 +400,34 @@ class PDFOCRProcessor:
 
     def process_image(self, image, preprocess=False, contrast=False, scale=1.0, crop_whitespaces=False, lang=None, rewrite_llm=False, llm_client=None, llm_model_name=None):
         log("Starting image processing...")
-        img = image
-        if preprocess: img = self.preprocess_page(img)
-        if contrast: img = self.enhance_contrast(img)
-        if scale != 1.0: img = self.rescale_image(img, scale)
-        if crop_whitespaces: img = self.crop_whitespaces(img)
+        original_image = image.copy()
+        processed_image = image
+
+        if preprocess:
+            processed_image = self.preprocess_page(processed_image)
+        if contrast:
+            processed_image = self.enhance_contrast(processed_image)
+        if scale != 1.0:
+            processed_image = self.rescale_image(processed_image, scale)
+        if crop_whitespaces:
+            processed_image = self.crop_whitespaces(processed_image)
 
         start_t = time.time()
-        page_text = self.ocr_image(img, lang)
+        page_text = self.ocr_image(processed_image, lang)
         ocr_duration = time.time() - start_t
         log(f"OCR completed in {ocr_duration:.2f} seconds")
 
         llm_duration = -1
         if rewrite_llm and llm_client:
             llm_start = time.time()
-            page_text = self.clean_ocr_text(llm_client, llm_model_name, page_text)
+            page_text = self.clean_ocr_text(
+                llm_client, llm_model_name, page_text)
             llm_duration = time.time() - llm_start
             log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+
+        # Convert images to base64 for JSON response
+        original_image_b64 = self._image_to_base64(original_image)
+        processed_image_b64 = self._image_to_base64(processed_image)
 
         log("Image processing completed.")
         return {
@@ -417,4 +436,6 @@ class PDFOCRProcessor:
             "ocr_duration": ocr_duration,
             "llm_model": llm_model_name if rewrite_llm and llm_client else None,
             "llm_duration": llm_duration,
+            "original_image": original_image_b64,
+            "processed_image": processed_image_b64,
         }

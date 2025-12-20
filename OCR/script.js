@@ -7,6 +7,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const loadingIndicator = document.getElementById("loading-indicator");
   const resultsArea = document.getElementById("results-area");
   const ocrOutput = document.getElementById("ocr-output");
+  const imageResultsContainer = document.getElementById(
+    "image-results-container"
+  );
+  const originalImage = document.getElementById("original-image");
+  const processedImage = document.getElementById("processed-image");
   const copyButton = document.getElementById("copy-button");
   const downloadButton = document.getElementById("download-button");
   const scaleSlider = document.getElementById("scale-slider");
@@ -131,6 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let fullText = "";
       if (isPdf) {
+        imageResultsContainer.hidden = true;
         // For PDF, data is an array of page results
         data.sort((a, b) => a.page - b.page); // Ensure pages are in order
         fullText = data
@@ -139,6 +145,9 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         // For Image, data is a single result object
         fullText = data.text;
+        originalImage.src = `data:image/png;base64,${data.original_image}`;
+        processedImage.src = `data:image/png;base64,${data.processed_image}`;
+        imageResultsContainer.hidden = false;
       }
 
       ocrOutput.textContent = fullText;

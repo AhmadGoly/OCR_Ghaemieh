@@ -38,7 +38,8 @@ class BaseOCRResponse(BaseModel):
     llm_duration: float = Field(..., description="The time taken for the LLM enhancement in seconds. A value of -1 indicates that the LLM was not used.")
 
 class ImageOCRResponse(BaseOCRResponse):
-    pass
+    original_image: Optional[str] = Field(None, description="Base64 encoded original image.")
+    processed_image: Optional[str] = Field(None, description="Base64 encoded processed image.")
 
 class PDFPageOCRResponse(BaseOCRResponse):
     page: int = Field(..., description="The page number of the processed page.")
@@ -147,7 +148,10 @@ async def ocr_image(
     if use_llm:
         llm_client = OpenAI(api_key=llm_api_key, base_url=llm_url)
 
-    image = Image.open(io.BytesIO(await file.read()))
+    image_data = await file.read()
+    image = Image.open(io.BytesIO(image_data))
+    image.load()  # Force loading the image data to prevent errors
+
     result = processor.process_image(
         image,
         lang=lang,
