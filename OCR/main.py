@@ -27,6 +27,7 @@ class ModelName(str, Enum):
     docling = "docling"
     qwen = "qwen"
     varco = "varco"
+    olmocr_2b = "olmocr_2b"
 
 # --- Pydantic Models for API Documentation ---
 
@@ -73,6 +74,10 @@ async def lifespan(app: FastAPI):
         print("Loading Varco model...")
         models['varco'] = PDFOCRProcessor(ocr_backend='varco')
         print("Varco model loaded successfully.")
+    if config.LOAD_OLMOCR_2B:
+        print("Loading OLMOCR 2B model...")
+        models['olmocr_2b'] = PDFOCRProcessor(ocr_backend='olmocr_2b')
+        print("OLMOCR 2B model loaded successfully.")
 
     print("-" * 20)
     print(f"Startup complete. Models loaded: {list(models.keys())}")

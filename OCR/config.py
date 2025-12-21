@@ -15,11 +15,15 @@ LOAD_QWEN = False
 # Enable or disable loading of the Varco OCR model.
 LOAD_VARCO = False
 
+# Enable or disable loading of the OLM model.
+USE_OLM = True
+LOAD_OLMOCR_2B = True
+
 # FastAPI server configuration
 FASTAPI_PORT = 4567
 
 # Accepted values for endpoints
-ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco"]
+ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco", "olmocr_2b"]
 ACCEPTED_LANGUAGES = ["eng", "ara", "fas"]
 
 # Default endpoint parameters

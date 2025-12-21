@@ -81,6 +81,12 @@ class PDFOCRProcessor:
             self.varco_processor = AutoProcessor.from_pretrained(self.varco_model_name)
             log("Varco model loaded on GPU.")
 
+        if self.ocr_backend == 'olmocr_2b':
+            log("Loading OlmOCR 2B model...")
+            from olm.OlmOCR import olm_ocr_text_extraction
+            self.olm_ocr_text_extraction = olm_ocr_text_extraction
+            log("OlmOCR 2B model loaded.")
+
     def _to_gray(self, pil_image):
         img = np.array(pil_image)
         if len(img.shape) == 3 and img.shape[2] == 3:
@@ -272,11 +278,19 @@ class PDFOCRProcessor:
         log("Docling OCR done.")
         return doc.export_to_markdown()
 
+    def _ocr_olmocr_2b(self, pil_image):
+        log("Running OlmOCR 2B OCR...")
+        text = self.olm_ocr_text_extraction(pil_image)
+        log("OlmOCR 2B OCR done.")
+        return text
+
     def ocr_image(self, pil_image, lang=None):
         if self.ocr_backend == 'qwen':
             return self._ocr_qwen(pil_image)
         if self.ocr_backend == 'varco':
             return self._ocr_varco(pil_image)
+        if self.ocr_backend == 'olmocr_2b':
+            return self._ocr_olmocr_2b(pil_image)
 
         effective_lang = lang if lang is not None else self.lang
 
