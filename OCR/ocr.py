@@ -30,6 +30,7 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractCliOcrOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 import config
+import re
 
 def log(msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
@@ -161,6 +162,9 @@ class PDFOCRProcessor:
         log("Running Tesseract OCR...")
         use_lang = lang if lang else self.lang
         result = pytesseract.image_to_string(pil_image, lang=use_lang)
+        result = re.sub(r'(?<!\n)\n(?!\n)', ' ', result)
+        #result = re.sub(r'(?<!\.)\s*\n+\s*', ' ', result)
+        #result = re.sub(r'\n+', '\n', result)
         log("Tesseract OCR done.")
         return result
 
@@ -295,8 +299,10 @@ class PDFOCRProcessor:
         lang_list = effective_lang.split('+') if effective_lang else None
 
         if self.ocr_backend == 'docling':
+            log(f"Passed languages are: {lang_list}")
             return self._ocr_docling(pil_image, lang_list)
         if self.ocr_backend == 'olmocr_2b':
+            log(f"Passed languages are: {lang_list}")
             return self._ocr_olmocr_2b(pil_image, lang_list)
 
         return self._ocr_tesseract(pil_image, effective_lang)
