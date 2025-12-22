@@ -5,8 +5,8 @@ from io import BytesIO
 
 def olm_ocr_text_extraction(
     pil_image,
-    llm_url="http://192.168.159.43:1234/v1",
-    llm_api_key="no-key",
+    llm_url,
+    llm_api_key,
     language_list=["fas", "eng"]
 ):
     client = OpenAI(api_key=llm_api_key, base_url=llm_url)
@@ -27,7 +27,7 @@ def olm_ocr_text_extraction(
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": f"Read all text in this image. Languages might be {languages}."},
+                {"type": "text", "text": f"Read all text in this image. Languages might be {languages}. Here is the image:\n\n"},
                 {"type": "image_url", "image_url": {"url": data_url}}
             ]
         }
@@ -36,7 +36,7 @@ def olm_ocr_text_extraction(
     response = client.chat.completions.create(
         model="allenai/olmocr-2-7b",
         messages=messages,
-        max_tokens=4096
+        max_tokens=8000
     )
     
     return response.choices[0].message.content

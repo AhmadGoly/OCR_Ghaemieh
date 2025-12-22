@@ -16,8 +16,9 @@ LOAD_QWEN = False
 LOAD_VARCO = False
 
 # Enable or disable loading of the OLM model.
-USE_OLM = True
 LOAD_OLMOCR_2B = True
+OLMOCR_LLM_URL_V1 = "http://192.168.159.43:1234/v1"
+OLMOCR_API_KEY = "no-key"
 
 # FastAPI server configuration
 FASTAPI_PORT = 4567

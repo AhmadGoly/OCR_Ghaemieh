@@ -278,9 +278,9 @@ class PDFOCRProcessor:
         log("Docling OCR done.")
         return doc.export_to_markdown()
 
-    def _ocr_olmocr_2b(self, pil_image):
+    def _ocr_olmocr_2b(self, pil_image, lang_list):
         log("Running OlmOCR 2B OCR...")
-        text = self.olm_ocr_text_extraction(pil_image)
+        text = self.olm_ocr_text_extraction(pil_image,config.OLMOCR_LLM_URL_V1,config.OLMOCR_API_KEY,lang_list)
         log("OlmOCR 2B OCR done.")
         return text
 
@@ -289,14 +289,15 @@ class PDFOCRProcessor:
             return self._ocr_qwen(pil_image)
         if self.ocr_backend == 'varco':
             return self._ocr_varco(pil_image)
-        if self.ocr_backend == 'olmocr_2b':
-            return self._ocr_olmocr_2b(pil_image)
+        
 
         effective_lang = lang if lang is not None else self.lang
+        lang_list = effective_lang.split('+') if effective_lang else None
 
         if self.ocr_backend == 'docling':
-            lang_list = effective_lang.split('+') if effective_lang else None
             return self._ocr_docling(pil_image, lang_list)
+        if self.ocr_backend == 'olmocr_2b':
+            return self._ocr_olmocr_2b(pil_image, lang_list)
 
         return self._ocr_tesseract(pil_image, effective_lang)
 
