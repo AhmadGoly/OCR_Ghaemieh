@@ -288,6 +288,45 @@ class PDFOCRProcessor:
         log("OlmOCR 2B OCR done.")
         return text
 
+    def _ocr_tesseract_and_olmocr(self, pil_image, lang=None):
+        log("Running Tesseract and OlmOCR...")
+        lang_list = lang.split('+') if lang else None
+
+        # Run Tesseract
+        tesseract_text = self._ocr_tesseract(pil_image, lang)
+
+        # Run OlmOCR
+        # Ensure olm_ocr_text_extraction is available
+        if not hasattr(self, 'olm_ocr_text_extraction'):
+            # This should have been loaded at startup if the model is selected
+            # but as a fallback, we can try to import it here.
+            from olm.OlmOCR import olm_ocr_text_extraction
+            self.olm_ocr_text_extraction = olm_ocr_text_extraction
+
+        olmocr_text = self._ocr_olmocr_2b(pil_image, lang_list)
+
+        return tesseract_text, olmocr_text
+
+    def _llm_reconcile_ocr(self, llm_client, llm_model_name, tesseract_text, olmocr_text):
+        log("Reconciling OCR outputs with LLM...")
+        system_prompt = """You are an expert assistant. Your task is to correct and combine the text from two different OCR models into one coherent and accurate block of text.
+Input 1 (Tesseract): {}
+Input 2 (OlmOCR): {}
+Instruction: Please produce the corrected and finalized text."""
+
+        formatted_prompt = system_prompt.format(tesseract_text, olmocr_text)
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": formatted_prompt}
+        ]
+
+        completion = llm_client.chat.completions.create(
+            model=llm_model_name,
+            messages=messages
+        )
+        return completion.choices[0].message.content
+
     def ocr_image(self, pil_image, lang=None):
         if self.ocr_backend == 'qwen':
             return self._ocr_qwen(pil_image)
@@ -381,6 +420,33 @@ class PDFOCRProcessor:
         return text
 
 
+    def _process_single_image(self, image, lang, rewrite_llm, llm_client, llm_model_name):
+        if self.ocr_backend == "tesseract+olmocr_llm":
+            start_t = time.time()
+            tesseract_text, olmocr_text = self._ocr_tesseract_and_olmocr(image, lang)
+            ocr_duration = time.time() - start_t
+            log(f"Dual OCR completed in {ocr_duration:.2f} seconds")
+
+            llm_start = time.time()
+            page_text = self._llm_reconcile_ocr(llm_client, llm_model_name, tesseract_text, olmocr_text)
+            llm_duration = time.time() - llm_start
+            log(f"LLM reconciliation completed in {llm_duration:.2f} seconds")
+        else:
+            start_t = time.time()
+            page_text = self.ocr_image(image, lang)
+            ocr_duration = time.time() - start_t
+            log(f"OCR completed in {ocr_duration:.2f} seconds")
+
+            llm_duration = -1
+            if rewrite_llm and llm_client:
+                llm_start = time.time()
+                page_text = self.clean_ocr_text(
+                    llm_client, llm_model_name, page_text)
+                llm_duration = time.time() - llm_start
+                log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+
+        return page_text, ocr_duration, llm_duration
+
     def process(self, pdf_path, start_page=1, end_page=None, preprocess=False, contrast=False, scale=1.0, crop_whitespaces=False, lang=None, rewrite_llm=False, llm_client=None, llm_model_name=None):
         log("Starting batch processing...")
         images = convert_from_path(pdf_path, first_page=start_page, last_page=end_page)
@@ -394,17 +460,7 @@ class PDFOCRProcessor:
             if scale != 1.0: img = self.rescale_image(img, scale)
             if crop_whitespaces: img = self.crop_whitespaces(img)
 
-            start_t = time.time()
-            page_text = self.ocr_image(img, lang)
-            ocr_duration = time.time() - start_t
-            log(f"OCR completed in {ocr_duration:.2f} seconds")
-
-            llm_duration = -1
-            if rewrite_llm and llm_client:
-                llm_start = time.time()
-                page_text = self.clean_ocr_text(llm_client, llm_model_name, page_text)
-                llm_duration = time.time() - llm_start
-                log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+            page_text, ocr_duration, llm_duration = self._process_single_image(img, lang, rewrite_llm, llm_client, llm_model_name)
 
             results.append({
                 "page": i,
@@ -433,18 +489,7 @@ class PDFOCRProcessor:
         if crop_whitespaces:
             processed_image = self.crop_whitespaces(processed_image)
 
-        start_t = time.time()
-        page_text = self.ocr_image(processed_image, lang)
-        ocr_duration = time.time() - start_t
-        log(f"OCR completed in {ocr_duration:.2f} seconds")
-
-        llm_duration = -1
-        if rewrite_llm and llm_client:
-            llm_start = time.time()
-            page_text = self.clean_ocr_text(
-                llm_client, llm_model_name, page_text)
-            llm_duration = time.time() - llm_start
-            log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+        page_text, ocr_duration, llm_duration = self._process_single_image(processed_image, lang, rewrite_llm, llm_client, llm_model_name)
 
         # Convert images to base64 for JSON response
         original_image_b64 = self._image_to_base64(original_image)
