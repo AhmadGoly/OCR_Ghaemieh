@@ -34,7 +34,7 @@ def olm_ocr_text_extraction(
     ]
     
     response = client.chat.completions.create(
-        model="allenai/olmocr-2-7b",
+        model="olmOCR-2-7B-1025-Q8_0.gguf",
         messages=messages,
         max_tokens=8000
     )
