@@ -24,7 +24,7 @@ OLMOCR_API_KEY = "no-key"
 FASTAPI_PORT = 4567
 
 # Accepted values for endpoints
-ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco", "olmocr_2b"]
+ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco", "olmocr_2b", "tesseract+olmocr_llm"]
 ACCEPTED_LANGUAGES = ["eng", "ara", "fas"]
 
 # Default endpoint parameters

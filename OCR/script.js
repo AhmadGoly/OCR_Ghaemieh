@@ -75,6 +75,18 @@ document.addEventListener("DOMContentLoaded", () => {
     scaleValue.textContent = e.target.value;
   });
 
+  const modelSelect = document.getElementById("model-select");
+  const llmToggle = document.getElementById("llm-toggle");
+
+  modelSelect.addEventListener("change", (e) => {
+    if (e.target.value === "tesseract+olmocr_llm") {
+      llmToggle.checked = true;
+      llmToggle.disabled = true;
+    } else {
+      llmToggle.disabled = false;
+    }
+  });
+
   // --- Form Submission ---
   submitButton.addEventListener("click", async () => {
     if (!selectedFile) {

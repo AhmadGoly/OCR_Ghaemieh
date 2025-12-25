@@ -28,6 +28,7 @@ class ModelName(str, Enum):
     qwen = "qwen"
     varco = "varco"
     olmocr_2b = "olmocr_2b"
+    tesseract_olmocr_llm = "tesseract+olmocr_llm"
 
 # --- Pydantic Models for API Documentation ---
 
@@ -78,6 +79,12 @@ async def lifespan(app: FastAPI):
         print("Loading OLMOCR 2B model...")
         models['olmocr_2b'] = PDFOCRProcessor(ocr_backend='olmocr_2b')
         print("OLMOCR 2B model loaded successfully.")
+
+    # Also load a processor for the combined model
+    if 'tesseract+olmocr_llm' in config.ACCEPTED_MODELS:
+        print("Loading processor for Tesseract+OlmOCR+LLM...")
+        models['tesseract+olmocr_llm'] = PDFOCRProcessor(ocr_backend='tesseract+olmocr_llm')
+        print("Tesseract+OlmOCR+LLM processor loaded successfully.")
 
     print("-" * 20)
     print(f"Startup complete. Models loaded: {list(models.keys())}")
