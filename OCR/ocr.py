@@ -43,6 +43,7 @@ class PDFOCRProcessor:
                  qwen_max_tokens=2000,
                  varco_model_name="NCSOFT/VARCO-VISION-2.0-1.7B-OCR",
                  varco_max_tokens=1024):
+        self.postprocess_llm = OpenAI(api_key=config.DEFAULT_LLM_API_KEY, base_url=config.DEFAULT_LLM_URL)
         self.lang = lang
         self.ocr_backend = ocr_backend
         self.qwen_model_name = qwen_model_name
@@ -290,7 +291,7 @@ class PDFOCRProcessor:
         log("OlmOCR 2B OCR done.")
         return text
     
-    def _ocr_olmocr_tesseract_llm(self, pil_image, lang_list, lang, llm_client, llm_model_name):
+    def _ocr_olmocr_tesseract_llm(self, pil_image, lang_list, lang):
         log("Running OlmOCR+Tesseract OCR...")
         log("Step 1: OLMOCR is processing...")
         text_1 = self.olm_ocr_text_extraction(pil_image,config.OLMOCR_LLM_URL_V1,config.OLMOCR_API_KEY,lang_list)
@@ -301,14 +302,15 @@ class PDFOCRProcessor:
         text_2 = re.sub(r'(?<!\n)\n(?!\n)', ' ', result)
         log("Tesseract OCR complete.")
         log("Step 3: LLM Postprocessing...")
+        
         llm_start = time.time()
         final_text = self.clean_ocr_text(
-            llm_client, llm_model_name, *[text_1,text_2])
+            self.postprocess_llm, config.DEFAULT_LLM_MODEL_NAME, *[text_1,text_2])
         llm_duration = time.time() - llm_start
         log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
         return final_text
 
-    def ocr_image(self, pil_image, lang=None, llm_client=None, llm_model_name=None):
+    def ocr_image(self, pil_image, lang=None):
         if self.ocr_backend == 'qwen':
             return self._ocr_qwen(pil_image)
         if self.ocr_backend == 'varco':
@@ -326,7 +328,7 @@ class PDFOCRProcessor:
             return self._ocr_olmocr_2b(pil_image, lang_list)
         if self.ocr_backend == 'olmocr+tesseract+llm':
             log(f"Passed languages are: {lang_list}")
-            return self._ocr_olmocr_tesseract_llm(pil_image, lang_list, effective_lang, llm_client, llm_model_name)
+            return self._ocr_olmocr_tesseract_llm(pil_image, lang_list, effective_lang)
 
         return self._ocr_tesseract(pil_image, effective_lang)
 
@@ -458,7 +460,7 @@ class PDFOCRProcessor:
             processed_image = self.crop_whitespaces(processed_image)
 
         start_t = time.time()
-        page_text = self.ocr_image(processed_image, lang, llm_client, llm_model_name)
+        page_text = self.ocr_image(processed_image, lang)
         ocr_duration = time.time() - start_t
         log(f"OCR completed in {ocr_duration:.2f} seconds")
 
