@@ -12,6 +12,7 @@ import torch
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, LlavaOnevisionForConditionalGeneration
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from olm.OlmOCR import olm_ocr_text_extraction
 
 print("Importing image processing libraries for OCR...")
 import cv2 as cv
@@ -29,6 +30,7 @@ from qwen_vl_utils import process_vision_info
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractCliOcrOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
+
 import config
 import re
 
@@ -51,6 +53,7 @@ class PDFOCRProcessor:
         self.qwen_processor = None
         self.varco_model = None
         self.varco_processor = None
+        self.olm_ocr_text_extraction = olm_ocr_text_extraction
         log("Initializing PDFOCRProcessor...")
 
         if self.ocr_backend == 'qwen':
@@ -84,7 +87,6 @@ class PDFOCRProcessor:
 
         if self.ocr_backend == 'olmocr_2b':
             log("Loading OlmOCR 2B model...")
-            from olm.OlmOCR import olm_ocr_text_extraction
             self.olm_ocr_text_extraction = olm_ocr_text_extraction
             log("OlmOCR 2B model loaded.")
 
