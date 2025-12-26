@@ -287,8 +287,26 @@ class PDFOCRProcessor:
         text = self.olm_ocr_text_extraction(pil_image,config.OLMOCR_LLM_URL_V1,config.OLMOCR_API_KEY,lang_list)
         log("OlmOCR 2B OCR done.")
         return text
+    
+    def _ocr_olmocr_tesseract_llm(self, pil_image, lang_list, lang, llm_client, llm_model_name):
+        log("Running OlmOCR+Tesseract OCR...")
+        log("Step 1: OLMOCR is processing...")
+        text_1 = self.olm_ocr_text_extraction(pil_image,config.OLMOCR_LLM_URL_V1,config.OLMOCR_API_KEY,lang_list)
+        log("OlmOCR 2B OCR complete.")
+        log("Step 2: Tesseract OCR is processing...")
+        use_lang = lang if lang else self.lang
+        result = pytesseract.image_to_string(pil_image, lang=use_lang)
+        text_2 = re.sub(r'(?<!\n)\n(?!\n)', ' ', result)
+        log("Tesseract OCR complete.")
+        log("Step 3: LLM Postprocessing...")
+        llm_start = time.time()
+        final_text = self.clean_ocr_text(
+            llm_client, llm_model_name, *[text_1,text_2])
+        llm_duration = time.time() - llm_start
+        log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+        return final_text
 
-    def ocr_image(self, pil_image, lang=None):
+    def ocr_image(self, pil_image, lang=None, llm_client=None, llm_model_name=None):
         if self.ocr_backend == 'qwen':
             return self._ocr_qwen(pil_image)
         if self.ocr_backend == 'varco':
@@ -304,6 +322,9 @@ class PDFOCRProcessor:
         if self.ocr_backend == 'olmocr_2b':
             log(f"Passed languages are: {lang_list}")
             return self._ocr_olmocr_2b(pil_image, lang_list)
+        if self.ocr_backend == 'olmocr+tesseract+llm':
+            log(f"Passed languages are: {lang_list}")
+            return self._ocr_olmocr_tesseract_llm(pil_image, lang_list, effective_lang, llm_client, llm_model_name)
 
         return self._ocr_tesseract(pil_image, effective_lang)
 
@@ -321,12 +342,13 @@ class PDFOCRProcessor:
             {
                 "role": "system",
                 "content": (
-                    "You are a Persian and English text rewriter. "
-                    "You will get OCR outputs separated like this (all for the same document, from different models):\n"
+                    "You are a Persian+English+Arabic text rewriter. User will send you the results of multi OCR models for only one page. in other terms, the text of models are very similar. "
+                    "Your job is to write only one cleaned version of OCR.\n\n"
+                    "You will get OCR outputs separated like this (all for the same document page, but from different models):\n"
                     "-----\nOCR output 1:\n...\n-----\nOCR output 2:\n...\n-----\n"
                     "Use OCR 1 as the main template. Rewrite it to fix wrong words and obvious OCR mistakes. "
                     "Use other outputs only if they suggest a better word for corrupted parts in OCR 1. "
-                    "Do not add extra words. Avoid repeating content. "
+                    "Do not add extra words. Avoid repeating content. Focus on a good meaning on sentences."
                     "Respond only in JSON: {\"text\": \"...\"}."
                 )
             },
@@ -338,7 +360,7 @@ class PDFOCRProcessor:
             response_format=OCRCleanedText
         )
         return completion.choices[0].message.parsed.text
-
+    
     def visualize(self, image, text, title):
         plt.figure(figsize=(12,6))
         plt.subplot(1,2,1)
@@ -434,17 +456,20 @@ class PDFOCRProcessor:
             processed_image = self.crop_whitespaces(processed_image)
 
         start_t = time.time()
-        page_text = self.ocr_image(processed_image, lang)
+        page_text = self.ocr_image(processed_image, lang, llm_client, llm_model_name)
         ocr_duration = time.time() - start_t
         log(f"OCR completed in {ocr_duration:.2f} seconds")
 
         llm_duration = -1
         if rewrite_llm and llm_client:
-            llm_start = time.time()
-            page_text = self.clean_ocr_text(
-                llm_client, llm_model_name, page_text)
-            llm_duration = time.time() - llm_start
-            log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
+            if self.ocr_backend == "":
+                log("Can't use LLM Postprocessing for OLMOCR+Tesseract because it's already used.")
+            else:
+                llm_start = time.time()
+                page_text = self.clean_ocr_text(
+                    llm_client, llm_model_name, page_text)
+                llm_duration = time.time() - llm_start
+                log(f"LLM rewriting completed in {llm_duration:.2f} seconds")
 
         # Convert images to base64 for JSON response
         original_image_b64 = self._image_to_base64(original_image)
