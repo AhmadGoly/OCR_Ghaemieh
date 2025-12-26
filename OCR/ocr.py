@@ -294,15 +294,18 @@ class PDFOCRProcessor:
     def _ocr_olmocr_tesseract_llm(self, pil_image, lang_list, lang):
         log("Running OlmOCR+Tesseract OCR...")
         log("Step 1: OLMOCR is processing...")
+        llm_start = time.time()
         text_1 = self.olm_ocr_text_extraction(pil_image,config.OLMOCR_LLM_URL_V1,config.OLMOCR_API_KEY,lang_list)
-        log("OlmOCR 2B OCR complete.")
+        llm_duration = time.time() - llm_start
+        log(f"OlmOCR 2B OCR completed in {llm_duration:.2f} seconds.")
         log("Step 2: Tesseract OCR is processing...")
+        llm_start = time.time()
         use_lang = lang if lang else self.lang
         result = pytesseract.image_to_string(pil_image, lang=use_lang)
         text_2 = re.sub(r'(?<!\n)\n(?!\n)', ' ', result)
-        log("Tesseract OCR complete.")
+        llm_duration = time.time() - llm_start
+        log(f"Tesseract OCR completed in {llm_duration:.2f} seconds.")
         log("Step 3: LLM Postprocessing...")
-        
         llm_start = time.time()
         final_text = self.clean_ocr_text(
             self.postprocess_llm, config.DEFAULT_LLM_MODEL_NAME, *[text_1,text_2])
