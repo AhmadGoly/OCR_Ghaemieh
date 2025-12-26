@@ -462,8 +462,8 @@ class PDFOCRProcessor:
 
         llm_duration = -1
         if rewrite_llm and llm_client:
-            if self.ocr_backend == "":
-                log("Can't use LLM Postprocessing for OLMOCR+Tesseract because it's already used.")
+            if self.ocr_backend == "olmocr+tesseract+llm":
+                log("Skipping LLM Postprocessing for OLMOCR+Tesseract+LLM because it's already included.")
             else:
                 llm_start = time.time()
                 page_text = self.clean_ocr_text(

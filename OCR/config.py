@@ -20,11 +20,14 @@ LOAD_OLMOCR_2B = True
 OLMOCR_LLM_URL_V1 = "http://172.16.20.16:12346/v1"
 OLMOCR_API_KEY = "no-key"
 
+# Enable or disable loading of the OLM model.
+LOAD_OLMOCR_TESSERACT_LLM = True
+
 # FastAPI server configuration
 FASTAPI_PORT = 4567
 
 # Accepted values for endpoints
-ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco", "olmocr_2b"]
+ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco", "olmocr_2b", "olmocr+tesseract+llm"]
 ACCEPTED_LANGUAGES = ["eng", "ara", "fas"]
 
 # Default endpoint parameters
