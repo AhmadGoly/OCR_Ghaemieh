@@ -1,6 +1,6 @@
 import os
 
-VERSION = "3.0.1"
+VERSION = "3.0.2"
 
 try:
     from dotenv import load_dotenv

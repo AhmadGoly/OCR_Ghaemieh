@@ -12,7 +12,7 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -U ${POSTGRES_USER:-ocr_admin} -d ${POSTGRES_DB:-ghaemieh_ocr_db}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,7 +20,7 @@ services:
 
   ocr:
     build: .
-    image: ghaemieh-ocr:11.22.2025.ubuntu
+    image: ghaemieh-ocr:09.26.2026.ubuntu
     container_name: ghaemieh-ocr-refactored
     restart: unless-stopped
     working_dir: /app

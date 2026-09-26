@@ -8,7 +8,7 @@ from typing import List, Optional
 from contextlib import asynccontextmanager
 from enum import Enum
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from PIL import Image
