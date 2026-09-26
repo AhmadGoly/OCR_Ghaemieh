@@ -1,6 +1,6 @@
 import os
 
-VERSION = "2.2.0"
+VERSION = "3.0.0"
 
 try:
     from dotenv import load_dotenv
@@ -10,6 +10,14 @@ try:
         load_dotenv(parent_env)
 except ImportError:
     pass
+
+# Database & Admin Authentication Configuration
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql+asyncpg://ocr_admin:ocr_secret_password@localhost:5432/ghaemieh_ocr_db"
+)
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 def get_bool_env(var_name: str, default: bool) -> bool:
     val = os.environ.get(var_name)

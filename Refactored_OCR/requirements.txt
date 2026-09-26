@@ -19,3 +19,9 @@ imutils
 accelerate
 torchvision
 python-dotenv
+sqlalchemy
+asyncpg
+bcrypt
+pyjwt
+jinja2
+

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پنل مدیریت - سامانه استخراج هوشمند متن قائمیه</title>
+
+    <!-- Google Fonts: Vazirmatn (Persian), Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Vazirmatn', '"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        crimson: {
+                            500: '#f43f5e',
+                            600: '#e11d48',
+                            700: '#be123c',
+                            800: '#9f1239',
+                            900: '#881337',
+                            950: '#4c0519',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Vazirmatn', sans-serif; }
+    </style>
+</head>
+<body class="bg-[#09090b] text-slate-100 min-h-screen selection:bg-red-600 selection:text-white">
+
+    <div x-data="adminPortalApp()" x-init="initAdmin()" class="min-h-screen flex flex-col">
+        
+        <!-- Top Navbar -->
+        <header class="border-b border-zinc-800/80 bg-[#121215]/80 backdrop-blur-xl sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center shadow-lg shadow-red-900/30">
+                        <i data-lucide="shield-check" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2 space-x-reverse">
+                            <span class="text-sm font-black text-white">سامانه OCR قائمیه</span>
+                            <span class="text-[10px] uppercase font-bold tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full" x-text="'نسخه ' + (stats.version || '3.0.0')"></span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">پنل مدیریت کاربران و پایش سرویس‌ها</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <a href="/" class="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 hover:text-white text-xs font-medium transition flex items-center space-x-1.5 space-x-reverse">
+                        <i data-lucide="scan-text" class="w-4 h-4"></i>
+                        <span>استودیو OCR</span>
+                    </a>
+                    <button @click="logout()" class="px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-300 hover:text-white text-xs font-medium transition flex items-center space-x-1.5 space-x-reverse">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                        <span>خروج</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+            <!-- Banner & Actions -->
+            <div class="bg-gradient-to-l from-[#18181b] via-[#121215] to-[#1e1315] border border-red-500/20 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 relative overflow-hidden">
+                <div class="absolute -right-20 -top-20 w-60 h-60 bg-red-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+                <div class="relative z-10">
+                    <h2 class="text-xl font-black text-white">مدیریت کاربران و دسترسی‌ها</h2>
+                    <p class="text-xs text-slate-400 mt-1">تعریف کاربران جدید، مدیریت رمز عبور و نظارت بر سلامت مدل‌های بینایی ماشین (VLM).</p>
+                </div>
+                <div class="flex items-center space-x-3 space-x-reverse relative z-10">
+                    <button @click="refreshData()" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5 space-x-reverse">
+                        <i data-lucide="refresh-cw" class="w-4 h-4" :class="{'animate-spin': loading}"></i>
+                        <span>به‌روزرسانی</span>
+                    </button>
+                    <button @click="openCreateUserModal()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs font-semibold shadow-lg shadow-red-900/30 transition flex items-center space-x-1.5 space-x-reverse">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i>
+                        <span>ایجاد کاربر جدید</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Overview Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <!-- Total Users -->
+                <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                    <p class="text-xs font-semibold text-slate-400">تعداد کاربران ثبت‌شده</p>
+                    <h3 class="text-3xl font-extrabold text-white mt-2" x-text="users.length">0</h3>
+                    <div class="absolute top-5 left-5 w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center">
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                    </div>
+                </div>
+
+                <!-- Total Extractions -->
+                <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                    <p class="text-xs font-semibold text-slate-400">کل اسناد پردازش‌شده</p>
+                    <h3 class="text-3xl font-extrabold text-white mt-2" x-text="stats.total_extractions || 0">0</h3>
+                    <div class="absolute top-5 left-5 w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center">
+                        <i data-lucide="file-check-2" class="w-5 h-5"></i>
+                    </div>
+                </div>
+
+                <!-- Gemma 4 VLM Status -->
+                <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                    <p class="text-xs font-semibold text-slate-400">مدل بینایی Gemma 4</p>
+                    <div class="flex items-center space-x-2 space-x-reverse mt-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50"></span>
+                        <span class="text-sm font-bold text-white">فعال و آماده</span>
+                    </div>
+                    <div class="absolute top-5 left-5 w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <i data-lucide="eye" class="w-5 h-5"></i>
+                    </div>
+                </div>
+
+                <!-- OlmOCR 2B Status -->
+                <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                    <p class="text-xs font-semibold text-slate-400">مدل بینایی OlmOCR 2B</p>
+                    <div class="flex items-center space-x-2 space-x-reverse mt-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50"></span>
+                        <span class="text-sm font-bold text-white">فعال و آماده</span>
+                    </div>
+                    <div class="absolute top-5 left-5 w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <i data-lucide="cpu" class="w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Table Card -->
+            <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl shadow-xl overflow-hidden">
+                <div class="p-5 border-b border-zinc-800/80 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-white">فهرست حساب‌های کاربری</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">کاربران تعریف‌شده در پایگاه داده PostgreSQL</p>
+                    </div>
+                    <span class="text-xs text-slate-400" x-text="users.length + ' کاربر'"></span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-zinc-900/60 text-slate-400 border-b border-zinc-800 font-semibold">
+                            <tr>
+                                <th class="p-4">شناسه</th>
+                                <th class="p-4">نام کاربری</th>
+                                <th class="p-4">نقش</th>
+                                <th class="p-4">نسخه ثبت</th>
+                                <th class="p-4">وضعیت</th>
+                                <th class="p-4 text-center">عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-800/60">
+                            <template x-for="user in users" :key="user.id">
+                                <tr class="hover:bg-zinc-800/30 transition">
+                                    <td class="p-4 text-slate-500 font-mono" x-text="'#' + user.id"></td>
+                                    <td class="p-4">
+                                        <div class="flex items-center space-x-2 space-x-reverse">
+                                            <div class="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-red-400 font-bold" x-text="user.username.charAt(0).toUpperCase()"></div>
+                                            <span class="font-semibold text-white" x-text="user.username"></span>
+                                        </div>
+                                    </td>
+                                    <td class="p-4">
+                                        <span 
+                                            class="px-2 py-0.5 rounded-full text-[10px] font-semibold border"
+                                            :class="user.is_admin ? 'bg-red-500/20 text-red-300 border-red-500/30' : 'bg-zinc-800 text-slate-300 border-zinc-700'"
+                                            x-text="user.is_admin ? 'مدیر سیستم' : 'کاربر عادی'"
+                                        ></span>
+                                    </td>
+                                    <td class="p-4">
+                                        <span class="font-mono text-slate-400 text-[11px]" x-text="'v' + user.created_version"></span>
+                                    </td>
+                                    <td class="p-4">
+                                        <button 
+                                            @click="toggleStatus(user)"
+                                            class="inline-flex items-center space-x-1.5 space-x-reverse px-2.5 py-1 rounded-full text-[11px] font-medium border transition"
+                                            :class="user.is_active ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'"
+                                        >
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="user.is_active ? 'bg-emerald-400' : 'bg-red-400'"></span>
+                                            <span x-text="user.is_active ? 'فعال' : 'غیرفعال'"></span>
+                                        </button>
+                                    </td>
+                                    <td class="p-4 text-center">
+                                        <div class="inline-flex items-center space-x-1.5 space-x-reverse">
+                                            <button 
+                                                @click="openResetPasswordModal(user)" 
+                                                title="تغییر رمز عبور"
+                                                class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-300 hover:text-white transition"
+                                            >
+                                                <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <button 
+                                                @click="deleteUser(user)" 
+                                                title="حذف کاربر"
+                                                class="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-300 hover:text-red-100 transition"
+                                            >
+                                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Connected Engines Section -->
+            <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-6 shadow-xl">
+                <h3 class="text-sm font-bold text-white mb-4 flex items-center space-x-2 space-x-reverse">
+                    <i data-lucide="server" class="w-4 h-4 text-red-400"></i>
+                    <span>مشخصات سرویس‌های متصل و موتورهای OCR</span>
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
+                        <span class="text-slate-400">موتور VLM گما ۴:</span>
+                        <p class="font-mono text-white text-xs mt-1">10.0.38.50:50015</p>
+                        <p class="text-[11px] text-slate-500 mt-0.5">مدل: gemma-4-26B-A4B-it-Q8_0.gguf</p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
+                        <span class="text-slate-400">موتور VLM اولم:</span>
+                        <p class="font-mono text-white text-xs mt-1">192.168.159.43:1234</p>
+                        <p class="text-[11px] text-slate-500 mt-0.5">مدل: allenai/olmocr-2-7b</p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
+                        <span class="text-slate-400">پایگاه داده:</span>
+                        <p class="font-mono text-white text-xs mt-1">PostgreSQL 16 Alpine</p>
+                        <p class="text-[11px] text-slate-500 mt-0.5">محل داده‌ها: ./data/postgres/</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Create User Modal -->
+        <div x-show="showCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div @click.away="showCreateModal = false" class="bg-[#141417] border border-red-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+                <h3 class="text-base font-bold text-white mb-4 flex items-center space-x-2 space-x-reverse">
+                    <i data-lucide="user-plus" class="w-5 h-5 text-red-500"></i>
+                    <span>تعریف کاربر جدید</span>
+                </h3>
+
+                <form @submit.prevent="submitCreateUser()" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">نام کاربری</label>
+                        <input type="text" x-model="newUser.username" required placeholder="مثال: ahmad" class="w-full px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-white outline-none focus:border-red-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">رمز عبور</label>
+                        <input type="password" x-model="newUser.password" required placeholder="••••••••" class="w-full px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-white outline-none focus:border-red-500">
+                    </div>
+
+                    <div class="flex items-center space-x-2 space-x-reverse pt-2">
+                        <input type="checkbox" id="modal-is-admin" x-model="newUser.is_admin" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
+                        <label for="modal-is-admin" class="text-xs text-slate-300">دسترسی مدیر سیستم (Admin)</label>
+                    </div>
+
+                    <div class="flex items-center justify-end space-x-3 space-x-reverse pt-4 border-t border-zinc-800">
+                        <button type="button" @click="showCreateModal = false" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-slate-300 transition">انصراف</button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-semibold text-white shadow-lg shadow-red-900/30 transition">ایجاد کاربر</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Reset Password Modal -->
+        <div x-show="showResetModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div @click.away="showResetModal = false" class="bg-[#141417] border border-red-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+                <h3 class="text-base font-bold text-white mb-2 flex items-center space-x-2 space-x-reverse">
+                    <i data-lucide="key" class="w-5 h-5 text-red-500"></i>
+                    <span>تغییر رمز عبور</span>
+                </h3>
+                <p class="text-xs text-slate-400 mb-4" x-text="'تغییر رمز برای کاربر: ' + (selectedUser?.username || '')"></p>
+
+                <form @submit.prevent="submitResetPassword()" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">رمز عبور جدید</label>
+                        <input type="password" x-model="resetPasswordVal" required placeholder="رمز عبور جدید" class="w-full px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-white outline-none focus:border-red-500">
+                    </div>
+
+                    <div class="flex items-center justify-end space-x-3 space-x-reverse pt-4 border-t border-zinc-800">
+                        <button type="button" @click="showResetModal = false" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-slate-300 transition">انصراف</button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-semibold text-white shadow-lg shadow-red-900/30 transition">ثبت رمز جدید</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function adminPortalApp() {
+            return {
+                users: [],
+                stats: {},
+                loading: false,
+                showCreateModal: false,
+                showResetModal: false,
+                selectedUser: null,
+                resetPasswordVal: '',
+                newUser: { username: '', password: '', is_admin: false },
+
+                async initAdmin() {
+                    await this.checkAuth();
+                    await this.refreshData();
+                },
+
+                async checkAuth() {
+                    try {
+                        const res = await fetch('/api/auth/me');
+                        if (!res.ok) throw new Error('Not logged in');
+                        const data = await res.json();
+                        if (!data.is_admin) {
+                            alert('دسترسی مجاز نیست. این پنل مخصوص مدیران است.');
+                            window.location.href = '/';
+                        }
+                    } catch (e) {
+                        window.location.href = '/login';
+                    }
+                },
+
+                async refreshData() {
+                    this.loading = true;
+                    try {
+                        const [usersRes, statsRes] = await Promise.all([
+                            fetch('/api/admin/users'),
+                            fetch('/api/admin/stats')
+                        ]);
+                        if (usersRes.ok) this.users = await usersRes.json();
+                        if (statsRes.ok) this.stats = await statsRes.json();
+                    } catch (e) {
+                        console.error('Failed to load admin data:', e);
+                    } finally {
+                        this.loading = false;
+                        this.$nextTick(() => lucide.createIcons());
+                    }
+                },
+
+                openCreateUserModal() {
+                    this.newUser = { username: '', password: '', is_admin: false };
+                    this.showCreateModal = true;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+
+                async submitCreateUser() {
+                    try {
+                        const res = await fetch('/api/admin/users', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.newUser)
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'خطا در ثبت کاربر');
+                        alert(data.message);
+                        this.showCreateModal = false;
+                        await this.refreshData();
+                    } catch (err) {
+                        alert('خطا: ' + err.message);
+                    }
+                },
+
+                openResetPasswordModal(user) {
+                    this.selectedUser = user;
+                    this.resetPasswordVal = '';
+                    this.showResetModal = true;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+
+                async submitResetPassword() {
+                    try {
+                        const res = await fetch(`/api/admin/users/${this.selectedUser.id}/reset-password`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ new_password: this.resetPasswordVal })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'خطا در تغییر رمز');
+                        alert(data.message);
+                        this.showResetModal = false;
+                    } catch (err) {
+                        alert('خطا: ' + err.message);
+                    }
+                },
+
+                async toggleStatus(user) {
+                    try {
+                        const res = await fetch(`/api/admin/users/${user.id}/toggle-status`, {
+                            method: 'PATCH'
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'خطا');
+                        user.is_active = data.is_active;
+                    } catch (err) {
+                        alert('خطا: ' + err.message);
+                    }
+                },
+
+                async deleteUser(user) {
+                    if (!confirm(`آیا از حذف کاربر '${user.username}' مطمئن هستید؟`)) return;
+                    try {
+                        const res = await fetch(`/api/admin/users/${user.id}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'خطا');
+                        alert(data.message);
+                        await this.refreshData();
+                    } catch (err) {
+                        alert('خطا: ' + err.message);
+                    }
+                },
+
+                async logout() {
+                    await fetch('/api/auth/logout', { method: 'POST' });
+                    window.location.href = '/login';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

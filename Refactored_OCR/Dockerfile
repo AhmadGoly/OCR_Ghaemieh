@@ -38,4 +38,5 @@ RUN python download_ocr_models.py && rm download_ocr_models.py
 
 COPY . .
 
-CMD ["python", "main.py"]
+ENV PYTHONUNBUFFERED=1
+CMD ["python", "-u", "main.py"]

@@ -1,183 +1,313 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
-  <head>
+<html lang="fa" dir="rtl" class="dark">
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ghaemieh OCR - Refactored</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <header>
-      <h1>سرویس استخراج متن از تصاویر و PDF (نسخه بازطراحی شده)</h1>
-      <p>فایل خود را آپلود کنید تا متن آن با استفاده از مدل‌های پیشرفته استخراج شود</p>
+    <title>استودیو استخراج هوشمند متن قائمیه (OCR Studio)</title>
+
+    <!-- Google Fonts: Vazirmatn (Persian), Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Vazirmatn', '"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        crimson: {
+                            500: '#f43f5e',
+                            600: '#e11d48',
+                            700: '#be123c',
+                            800: '#9f1239',
+                            900: '#881337',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Vazirmatn', sans-serif; }
+    </style>
+</head>
+<body class="bg-[#09090b] text-slate-100 min-h-screen selection:bg-red-600 selection:text-white flex flex-col">
+
+    <!-- Ambient Crimson Background Glows -->
+    <div class="fixed -top-40 -right-40 w-96 h-96 bg-red-600/10 rounded-full blur-[140px] pointer-events-none"></div>
+    <div class="fixed -bottom-40 -left-40 w-96 h-96 bg-rose-700/10 rounded-full blur-[140px] pointer-events-none"></div>
+
+    <!-- Header Navbar -->
+    <header class="border-b border-zinc-800/80 bg-[#121215]/80 backdrop-blur-xl sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center shadow-lg shadow-red-900/30">
+                    <i data-lucide="scan-text" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
+                        <span class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۰.۰</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3 space-x-reverse" id="nav-user-actions">
+                <a href="/admin" class="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 hover:text-white text-xs font-semibold transition flex items-center space-x-1.5 space-x-reverse">
+                    <i data-lucide="shield" class="w-4 h-4 text-red-400"></i>
+                    <span>پنل مدیریت</span>
+                </a>
+                <a href="/login" class="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-900/20 transition flex items-center space-x-1.5 space-x-reverse">
+                    <i data-lucide="user" class="w-4 h-4"></i>
+                    <span>ورود / حساب</span>
+                </a>
+            </div>
+        </div>
     </header>
 
-    <main>
-      <div class="container">
-        <div id="upload-area" class="upload-area">
-          <div class="upload-area-content">
-            <p>فایل خود را اینجا بکشید و رها کنید یا</p>
-            <button id="file-browser-button" class="button">انتخاب فایل</button>
-            <input
-              type="file"
-              id="file-input"
-              hidden
-              accept=".pdf,.png,.jpg,.jpeg,.tiff"
-            />
-          </div>
+    <!-- Main Workspace -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 relative z-10">
+
+        <!-- Upload Dropzone Card -->
+        <div class="bg-[#121215]/80 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+            <div id="upload-area" class="border-2 border-dashed border-zinc-700 hover:border-red-500/60 transition rounded-xl p-8 text-center cursor-pointer bg-zinc-900/30 flex flex-col items-center justify-center space-y-3">
+                <div class="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center">
+                    <i data-lucide="upload-cloud" class="w-7 h-7"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-bold text-white">فایل سند یا تصویر خود را اینجا رها کنید</p>
+                    <p class="text-xs text-slate-400 mt-1">پشتیبانی از فرمت‌های PDF، PNG، JPG و TIFF</p>
+                </div>
+                <button type="button" id="file-browser-button" class="mt-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-white transition flex items-center space-x-1.5 space-x-reverse">
+                    <i data-lucide="folder-open" class="w-4 h-4"></i>
+                    <span>انتخاب فایل از سیستم</span>
+                </button>
+                <input type="file" id="file-input" hidden accept=".pdf,.png,.jpg,.jpeg,.tiff" />
+            </div>
+            <div id="file-selected-badge" class="hidden mt-3 p-3 rounded-xl bg-red-950/40 border border-red-500/30 flex items-center justify-between">
+                <div class="flex items-center space-x-2 space-x-reverse text-xs text-red-200">
+                    <i data-lucide="file" class="w-4 h-4 text-red-400"></i>
+                    <span id="file-name-display" class="font-medium"></span>
+                </div>
+                <span class="text-[11px] text-slate-400" id="file-size-display"></span>
+            </div>
         </div>
 
-        <div class="options-container">
-          <button id="toggle-hints" class="button" style="margin-bottom: 1rem">
-            نمایش راهنما
-          </button>
-          <h2>تنظیمات</h2>
-          <div class="options-grid">
-            <div class="option">
-              <label for="model-select">مدل اصلی OCR:</label>
-              <select id="model-select" class="select">
-                <option value="tesseract">Tesseract</option>
-                <option value="docling">Docling</option>
-                <option value="qwen">Qwen (GPU)</option>
-                <option value="varco">Varco (GPU)</option>
-                <option value="olmocr_2b">OLMOCR 2B (VLM)</option>
-                <option value="gemma4">Gemma 4 (VLM)</option>
-              </select>
-              <span class="hint">مدل اصلی برای استخراج متن.</span>
+        <!-- Options Grid -->
+        <div class="bg-[#121215]/80 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-6">
+            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-4">
+                <h3 class="text-sm font-bold text-white flex items-center space-x-2 space-x-reverse">
+                    <i data-lucide="sliders" class="w-4 h-4 text-red-500"></i>
+                    <span>تنظیمات پردازش و مدل‌های هوش مصنوعی</span>
+                </h3>
+                <button type="button" id="toggle-hints" class="text-xs text-slate-400 hover:text-red-400 transition flex items-center space-x-1 space-x-reverse">
+                    <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                    <span>راهنمای پارامترها</span>
+                </button>
             </div>
 
-            <div class="option">
-              <label for="lang-select">زبان:</label>
-              <select id="lang-select" class="select">
-                <option value="fas">فارسی</option>
-                <option value="eng">انگلیسی</option>
-                <option value="ara">عربی</option>
-                <option value="ara+fas">عربی + فارسی</option>
-                <option value="eng+fas">انگلیسی + فارسی</option>
-                <option value="eng+ara">انگلیسی + عربی</option>
-                <option value="eng+ara+fas" selected>انگلیسی + عربی + فارسی</option>
-              </select>
-              <span class="hint">زبان‌های موجود در سند.</span>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 text-xs">
+                
+                <!-- Primary OCR Model -->
+                <div class="space-y-1.5">
+                    <label for="model-select" class="font-semibold text-slate-300">مدل اصلی استخراج متن:</label>
+                    <select id="model-select" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700 text-white outline-none focus:border-red-500 transition">
+                        <option value="gemma4" selected>Gemma 4 (VLM 26B Multimodal)</option>
+                        <option value="olmocr_2b">OLMOCR 2B (VLM)</option>
+                        <option value="tesseract">Tesseract OCR (CPU)</option>
+                        <option value="docling">IBM Docling</option>
+                        <option value="qwen">Qwen 2 VL (GPU)</option>
+                        <option value="varco">Varco Vision (GPU)</option>
+                    </select>
+                    <p class="hint hidden text-[11px] text-slate-400">موتور بینایی که برای رونویسی و استخراج متن سند به کار می‌رود.</p>
+                </div>
+
+                <!-- Languages -->
+                <div class="space-y-1.5">
+                    <label for="lang-select" class="font-semibold text-slate-300">زبان سند:</label>
+                    <select id="lang-select" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700 text-white outline-none focus:border-red-500 transition">
+                        <option value="eng+ara+fas" selected>فارسی + عربی + انگلیسی</option>
+                        <option value="fas">فارسی</option>
+                        <option value="ara">عربی</option>
+                        <option value="eng">انگلیسی</option>
+                        <option value="eng+fas">فارسی + انگلیسی</option>
+                    </select>
+                    <p class="hint hidden text-[11px] text-slate-400">زبان‌های موجود در سند مورد نظر.</p>
+                </div>
+
+                <!-- Scale Slider -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between">
+                        <label for="scale-slider" class="font-semibold text-slate-300">مقیاس تصویر:</label>
+                        <span id="scale-value" class="font-mono text-red-400 font-bold">1.0</span>
+                    </div>
+                    <input type="range" id="scale-slider" min="0.5" max="3.0" step="0.1" value="1.0" class="w-full accent-red-600 bg-zinc-800 rounded-lg cursor-pointer h-2" />
+                    <p class="hint hidden text-[11px] text-slate-400">بزرگنمایی وضوح تصویر برای اسناد با فونت ریز.</p>
+                </div>
+
+                <!-- PDF Page Range -->
+                <div class="space-y-1.5">
+                    <label class="font-semibold text-slate-300">محدوده صفحات PDF:</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="start-page" placeholder="صفحه شروع (1)" min="1" class="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white outline-none focus:border-red-500" />
+                        <input type="number" id="end-page" placeholder="صفحه پایان (اختیاری)" min="1" class="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white outline-none focus:border-red-500" />
+                    </div>
+                </div>
+
+                <!-- Preprocessing Toggles -->
+                <div class="space-y-2 col-span-1 md:col-span-2">
+                    <label class="font-semibold text-slate-300">بهینه‌سازی و فیلترهای تصویر:</label>
+                    <div class="flex flex-wrap gap-4 pt-1">
+                        <label class="inline-flex items-center space-x-2 space-x-reverse cursor-pointer">
+                            <input type="checkbox" id="preprocess-toggle" checked class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
+                            <span class="text-xs text-slate-300">پیش‌پردازش خاکستری</span>
+                        </label>
+                        <label class="inline-flex items-center space-x-2 space-x-reverse cursor-pointer">
+                            <input type="checkbox" id="contrast-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
+                            <span class="text-xs text-slate-300">افزایش کنتراست (CLAHE)</span>
+                        </label>
+                        <label class="inline-flex items-center space-x-2 space-x-reverse cursor-pointer">
+                            <input type="checkbox" id="crop-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
+                            <span class="text-xs text-slate-300">برش حاشیه‌های سفید</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- LLM Merger & Secondary Model -->
+                <div class="col-span-full border-t border-zinc-800/80 pt-4 space-y-3">
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <input type="checkbox" id="llm-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
+                        <label for="llm-toggle" class="text-xs font-bold text-white cursor-pointer">فعال‌سازی تصحیح هوشمند و ادغام دوگانه مدل‌ها با LLM</label>
+                    </div>
+
+                    <div id="secondary-model-container" class="hidden pl-6 pr-6 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                        <label for="secondary-model-select" class="block font-semibold text-slate-300">مدل دوم برای مقایسه و ترکیب (Secondary Model):</label>
+                        <select id="secondary-model-select" class="w-full max-w-md px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white outline-none focus:border-red-500">
+                            <option value="">هیچکدام (فقط پاکسازی تک‌مدلی)</option>
+                            <option value="olmocr_2b" selected>OLMOCR 2B (VLM)</option>
+                            <option value="gemma4">Gemma 4 (VLM 26B)</option>
+                            <option value="tesseract">Tesseract OCR</option>
+                        </select>
+                        <p class="text-[11px] text-slate-400">هوش مصنوعی هر دو خروجی را بررسی کرده و نسخه بدون خطای ترکیبی تولید می‌کند.</p>
+                    </div>
+                </div>
+
             </div>
 
-            <div class="option toggle-option">
-              <label for="preprocess-toggle">پیش‌پردازش:</label>
-              <label class="switch">
-                <input type="checkbox" id="preprocess-toggle" checked />
-                <span class="slider round"></span>
-              </label>
-              <span class="hint">تمیز کردن تصویر قبل از پردازش.</span>
+            <!-- Submit Button -->
+            <div class="pt-4 border-t border-zinc-800/80 flex items-center justify-end">
+                <button type="button" id="submit-button" disabled class="px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-xl shadow-red-950/40 transition flex items-center space-x-2 space-x-reverse">
+                    <i data-lucide="play" class="w-4 h-4"></i>
+                    <span>شروع استخراج متن</span>
+                </button>
             </div>
-
-            <div class="option toggle-option">
-              <label for="contrast-toggle">افزایش کنتراست:</label>
-              <label class="switch">
-                <input type="checkbox" id="contrast-toggle" />
-                <span class="slider round"></span>
-              </label>
-              <span class="hint">بهبود وضوح متن در تصاویر محو.</span>
-            </div>
-
-            <div class="option toggle-option">
-              <label for="crop-toggle">برش حاشیه‌ها:</label>
-              <label class="switch">
-                <input type="checkbox" id="crop-toggle" />
-                <span class="slider round"></span>
-              </label>
-              <span class="hint">حذف حاشیه‌های سفید اضافی.</span>
-            </div>
-
-            <div class="option toggle-option">
-              <label for="llm-toggle">بهبود با LLM و ادغام مدل‌ها:</label>
-              <label class="switch">
-                <input type="checkbox" id="llm-toggle" />
-                <span class="slider round"></span>
-              </label>
-              <span class="hint">استفاده از هوش مصنوعی برای اصلاح متن و ترکیب نتایج دو مدل.</span>
-            </div>
-
-            <div id="secondary-model-container" class="option" style="display: none;">
-              <label for="secondary-model-select">مدل دوم (برای بهبود):</label>
-              <select id="secondary-model-select" class="select">
-                <option value="">هیچکدام (فقط پاکسازی LLM)</option>
-                <option value="tesseract">Tesseract</option>
-                <option value="docling">Docling</option>
-                <option value="qwen">Qwen (GPU)</option>
-                <option value="varco">Varco (GPU)</option>
-                <option value="olmocr_2b">OLMOCR 2B (VLM)</option>
-                <option value="gemma4">Gemma 4 (VLM)</option>
-              </select>
-              <span class="hint">اگر مدل دوم انتخاب شود، نتایج هر دو مدل توسط LLM با هم ترکیب می‌شوند.</span>
-            </div>
-
-            <div class="option range-option">
-              <label for="scale-slider">مقیاس تصویر:</label>
-              <input
-                type="range"
-                id="scale-slider"
-                min="0.1"
-                max="5.0"
-                step="0.1"
-                value="1.0"
-              />
-              <span id="scale-value">1.0</span>
-              <span class="hint">تغییر اندازه تصویر برای دقت بیشتر.</span>
-            </div>
-
-            <div class="option page-range-option">
-              <label>محدوده صفحات (PDF):</label>
-              <div class="page-inputs">
-                <input
-                  type="number"
-                  id="start-page"
-                  placeholder="شروع"
-                  min="1"
-                />
-                <input
-                  type="number"
-                  id="end-page"
-                  placeholder="پایان"
-                  min="1"
-                />
-              </div>
-            </div>
-          </div>
-
-          <button id="submit-button" class="button primary-button" disabled>
-            ارسال و پردازش
-          </button>
         </div>
 
-        <div id="results-area" class="results-area" hidden>
-          <h2>نتایج استخراج</h2>
-          <div class="results-actions">
-            <button id="copy-button" class="button">کپی متن</button>
-            <button id="download-button" class="button">دانلود متن</button>
-          </div>
-
-          <div id="image-results-container" class="image-results-container" hidden>
-            <div class="image-container">
-              <h3>تصویر اصلی</h3>
-              <img id="original-image" src="" alt="Original Image" />
+        <!-- Processing Indicator -->
+        <div id="loading-indicator" hidden class="bg-[#121215]/80 border border-red-500/30 rounded-2xl p-8 text-center space-y-3 shadow-xl">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-red-600/10 text-red-500">
+                <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
             </div>
-            <div class="image-container">
-              <h3>تصویر پردازش شده</h3>
-              <img id="processed-image" src="" alt="Processed Image" />
-            </div>
-          </div>
-          <pre id="ocr-output"></pre>
+            <h4 class="text-sm font-bold text-white">در حال پردازش و استخراج متن با هوش مصنوعی...</h4>
+            <p class="text-xs text-slate-400">لطفاً شکیبا باشید. اسناد چندصفحه‌ای ممکن است چند ثانیه زمان ببرند.</p>
         </div>
 
-        <div id="loading-indicator" class="loading-indicator" hidden>
-           <p>در حال پردازش... لطفاً منتظر بمانید.</p>
+        <!-- Results Display Card -->
+        <div id="results-area" hidden class="space-y-6">
+            
+            <!-- Metrics Bar -->
+            <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
+                <div class="flex items-center space-x-4 space-x-reverse">
+                    <div>
+                        <span class="text-slate-400">مدل استفاده‌شده: </span>
+                        <span id="result-model-badge" class="font-bold text-red-400"></span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400">مدت زمان OCR: </span>
+                        <span id="result-ocr-duration" class="font-mono text-white"></span>
+                    </div>
+                    <div id="result-llm-container">
+                        <span class="text-slate-400">مدت زمان ادغام LLM: </span>
+                        <span id="result-llm-duration" class="font-mono text-emerald-400"></span>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <button id="copy-button" class="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-xs font-medium transition flex items-center space-x-1 space-x-reverse">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span>کپی متن</span>
+                    </button>
+                    <button id="download-button" class="px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-xs font-medium transition flex items-center space-x-1 space-x-reverse">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span>دانلود فایل متنی</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Side-by-Side Images & Output -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Visual Document Inspection -->
+                <div id="image-results-container" class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-5 shadow-xl space-y-4">
+                    <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-1.5 space-x-reverse">
+                        <i data-lucide="image" class="w-4 h-4 text-red-400"></i>
+                        <span>پیش‌نمایش بصری سند</span>
+                    </h4>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <p class="text-[11px] text-slate-400 mb-1">تصویر ورودی اصلی</p>
+                            <div class="rounded-xl overflow-hidden bg-black/50 border border-zinc-800 p-1 flex items-center justify-center min-h-[220px]">
+                                <img id="original-image" alt="Original" class="max-h-72 object-contain rounded-lg" />
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-[11px] text-slate-400 mb-1">تصویر فیلتر شده</p>
+                            <div class="rounded-xl overflow-hidden bg-black/50 border border-zinc-800 p-1 flex items-center justify-center min-h-[220px]">
+                                <img id="processed-image" alt="Processed" class="max-h-72 object-contain rounded-lg" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Extraction Area -->
+                <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-5 shadow-xl space-y-3 flex flex-col">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-1.5 space-x-reverse">
+                            <i data-lucide="file-text" class="w-4 h-4 text-red-400"></i>
+                            <span>متن نهایی استخراج‌شده</span>
+                        </h4>
+                        <span id="char-word-count" class="text-[11px] text-slate-500"></span>
+                    </div>
+                    <textarea 
+                        id="ocr-output" 
+                        readonly 
+                        rows="12"
+                        class="w-full flex-1 p-4 rounded-xl bg-zinc-900/90 border border-zinc-800 text-slate-100 text-sm leading-relaxed font-sans outline-none focus:border-red-500 transition resize-y"
+                    ></textarea>
+                </div>
+            </div>
+
         </div>
-      </div>
+
     </main>
 
-    <footer>
-      <p>ساخته شده با ❤️ - کتابخانه دیجیتال قائمیه</p>
+    <!-- Footer -->
+    <footer class="border-t border-zinc-800/80 bg-[#121215]/40 py-6 mt-12 text-center text-xs text-slate-500">
+        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۰.۰ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
     </footer>
 
     <script src="script.js"></script>
-  </body>
+</body>
 </html>

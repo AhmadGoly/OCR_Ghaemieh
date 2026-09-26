@@ -24,17 +24,77 @@ document.addEventListener("DOMContentLoaded", () => {
   const imageResultsContainer = document.getElementById("image-results-container");
   const originalImage = document.getElementById("original-image");
   const processedImage = document.getElementById("processed-image");
+  const fileSelectedBadge = document.getElementById("file-selected-badge");
+  const fileNameDisplay = document.getElementById("file-name-display");
+  const fileSizeDisplay = document.getElementById("file-size-display");
+  const resultModelBadge = document.getElementById("result-model-badge");
+  const resultOcrDuration = document.getElementById("result-ocr-duration");
+  const resultLlmDuration = document.getElementById("result-llm-duration");
+  const resultLlmContainer = document.getElementById("result-llm-container");
+  const charWordCount = document.getElementById("char-word-count");
+  const navUserActions = document.getElementById("nav-user-actions");
 
   let selectedFile = null;
+
+  // Initialize Lucide icons
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+
+  // Check login state to update top navigation bar
+  checkUserSession();
+
+  async function checkUserSession() {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (res.ok) {
+        const user = await res.json();
+        let navHtml = `
+          <div class="flex items-center space-x-2 space-x-reverse text-xs">
+            <span class="text-slate-400">کاربر:</span>
+            <span class="font-bold text-white">${user.username}</span>
+          </div>
+        `;
+        if (user.is_admin) {
+          navHtml += `
+            <a href="/admin" class="px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-300 hover:text-white text-xs font-semibold transition flex items-center space-x-1.5 space-x-reverse">
+              <i data-lucide="shield" class="w-4 h-4"></i>
+              <span>پنل مدیریت</span>
+            </a>
+          `;
+        }
+        navHtml += `
+          <button id="nav-logout-btn" class="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 hover:text-white text-xs font-semibold transition flex items-center space-x-1.5 space-x-reverse">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span>خروج</span>
+          </button>
+        `;
+        navUserActions.innerHTML = navHtml;
+        if (window.lucide) lucide.createIcons();
+
+        document.getElementById("nav-logout-btn").addEventListener("click", async () => {
+          await fetch("/api/auth/logout", { method: "POST" });
+          window.location.reload();
+        });
+      }
+    } catch (e) {
+      // Guest mode
+    }
+  }
 
   // Toggle hints visibility
   toggleHintsButton.addEventListener("click", () => {
     const hints = document.querySelectorAll(".hint");
-    const isHidden = hints[0].style.display === "none" || hints[0].style.display === "";
+    const isHidden = hints.length > 0 && (hints[0].classList.contains("hidden") || hints[0].style.display === "none");
     hints.forEach((hint) => {
-      hint.style.display = isHidden ? "block" : "none";
+      if (isHidden) {
+        hint.classList.remove("hidden");
+        hint.style.display = "block";
+      } else {
+        hint.classList.add("hidden");
+        hint.style.display = "none";
+      }
     });
-    toggleHintsButton.textContent = isHidden ? "مخفی‌سازی راهنما" : "نمایش راهنما";
   });
 
   // Scale slider update
@@ -44,10 +104,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // LLM Toggle listener to show/hide secondary model
   llmToggle.addEventListener("change", () => {
-    secondaryModelContainer.style.display = llmToggle.checked ? "block" : "none";
+    if (llmToggle.checked) {
+      secondaryModelContainer.classList.remove("hidden");
+    } else {
+      secondaryModelContainer.classList.add("hidden");
+    }
   });
 
-  // File selection
+  // File selection handlers
   fileBrowserButton.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", (e) => {
     if (e.target.files.length > 0) {
@@ -58,16 +122,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // Drag and drop
   uploadArea.addEventListener("dragover", (e) => {
     e.preventDefault();
-    uploadArea.classList.add("dragover");
+    uploadArea.classList.add("border-red-500", "bg-red-950/10");
   });
 
   uploadArea.addEventListener("dragleave", () => {
-    uploadArea.classList.remove("dragover");
+    uploadArea.classList.remove("border-red-500", "bg-red-950/10");
   });
 
   uploadArea.addEventListener("drop", (e) => {
     e.preventDefault();
-    uploadArea.classList.remove("dragover");
+    uploadArea.classList.remove("border-red-500", "bg-red-950/10");
     if (e.dataTransfer.files.length > 0) {
       handleFile(e.dataTransfer.files[0]);
     }
@@ -75,8 +139,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function handleFile(file) {
     selectedFile = file;
-    uploadArea.querySelector("p").textContent = `فایل انتخاب شده: ${file.name}`;
+    fileNameDisplay.textContent = file.name;
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    fileSizeDisplay.textContent = `${sizeMb} مگابایت`;
+    fileSelectedBadge.classList.remove("hidden");
     submitButton.disabled = false;
+    if (window.lucide) lucide.createIcons();
   }
 
   // Submit request
@@ -94,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
     formData.append("use_llm", llmToggle.checked);
 
     if (llmToggle.checked && secondaryModelSelect.value) {
-        formData.append("secondary_model", secondaryModelSelect.value);
+      formData.append("secondary_model", secondaryModelSelect.value);
     }
 
     if (selectedFile.type === "application/pdf") {
@@ -134,13 +202,25 @@ document.addEventListener("DOMContentLoaded", () => {
   function displayResults(result, isImage) {
     resultsArea.hidden = false;
     let textOutput = "";
+    let primaryModel = "";
+    let ocrDur = 0;
+    let llmDur = -1;
 
     if (Array.isArray(result)) {
       // PDF Results
       textOutput = result.map((page) => `--- صفحه ${page.page} ---\n${page.text}\n`).join("\n");
+      if (result.length > 0) {
+        primaryModel = result[0].ocr_model;
+        ocrDur = result.reduce((acc, p) => acc + (p.ocr_duration || 0), 0).toFixed(2);
+        llmDur = result.reduce((acc, p) => acc + (p.llm_duration > 0 ? p.llm_duration : 0), 0).toFixed(2);
+      }
     } else {
-      // Image Result
-      textOutput = result.text;
+      // Single Image Result
+      textOutput = result.text || "";
+      primaryModel = result.ocr_model;
+      ocrDur = (result.ocr_duration || 0).toFixed(2);
+      llmDur = result.llm_duration > 0 ? result.llm_duration.toFixed(2) : -1;
+
       if (isImage && result.original_image && result.processed_image) {
         imageResultsContainer.hidden = false;
         originalImage.src = `data:image/png;base64,${result.original_image}`;
@@ -148,23 +228,41 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    ocrOutput.textContent = textOutput;
-    window.scrollTo({ top: resultsArea.offsetTop, behavior: "smooth" });
+    ocrOutput.value = textOutput;
+
+    // Update metrics
+    resultModelBadge.textContent = primaryModel;
+    resultOcrDuration.textContent = `${ocrDur} ثانیه`;
+
+    if (llmDur > 0) {
+      resultLlmContainer.hidden = false;
+      resultLlmDuration.textContent = `${llmDur} ثانیه`;
+    } else {
+      resultLlmContainer.hidden = true;
+    }
+
+    // Word and character count
+    const words = textOutput.trim() ? textOutput.trim().split(/\s+/).length : 0;
+    const chars = textOutput.length;
+    charWordCount.textContent = `${words} کلمه | ${chars} کاراکتر`;
+
+    if (window.lucide) lucide.createIcons();
+    window.scrollTo({ top: resultsArea.offsetTop - 50, behavior: "smooth" });
   }
 
   // Copy results
   copyButton.addEventListener("click", () => {
-    navigator.clipboard.writeText(ocrOutput.textContent);
-    alert("متن کپی شد!");
+    navigator.clipboard.writeText(ocrOutput.value);
+    alert("متن با موفقیت کپی شد!");
   });
 
   // Download results
   downloadButton.addEventListener("click", () => {
-    const blob = new Blob([ocrOutput.textContent], { type: "text/plain" });
+    const blob = new Blob([ocrOutput.value], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "ocr_result.txt";
+    a.download = "ghaemieh_ocr_result.txt";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -1,10 +1,32 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ghaemieh-ocr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ocr_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ocr_secret_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ghaemieh_ocr_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ocr_admin} -d ${POSTGRES_DB:-ghaemieh_ocr_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   ocr:
     build: .
     image: ghaemieh-ocr:11.22.2025.ubuntu
     container_name: ghaemieh-ocr-refactored
+    restart: unless-stopped
     working_dir: /app
     command: python -u main.py
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "3334:4567"
     env_file:
@@ -12,5 +34,6 @@ services:
     environment:
       FASTAPI_PORT: 4567
       PYTHONUNBUFFERED: "1"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ocr_admin}:${POSTGRES_PASSWORD:-ocr_secret_password}@postgres:5432/${POSTGRES_DB:-ghaemieh_ocr_db}
     volumes:
       - ./:/app

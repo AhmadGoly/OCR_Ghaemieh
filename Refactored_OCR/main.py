@@ -27,6 +27,14 @@ from models.gemma import GemmaVLMModel
 from services.merger import LLMMerger
 from services.ocr_service import OCRService
 
+from db.init_db import init_database
+from db.session import get_db
+from db.models import User, ExtractionHistory
+from api.auth import router as auth_router
+from api.admin import router as admin_router
+from core.deps import get_current_user_optional
+from sqlalchemy.ext.asyncio import AsyncSession
+
 # --- Enums for API Documentation ---
 
 class ModelName(str, Enum):
@@ -60,7 +68,11 @@ ocr_service = None
 async def lifespan(app: FastAPI):
     global ocr_service
     config.print_startup_banner()
-    print("Initializing application and loading models...")
+    try:
+        await init_database()
+    except Exception as e:
+        print(f"Warning: Database initialization postponed/failed: {e}", flush=True)
+    print("Initializing application and loading models...", flush=True)
     loaded_models = {}
 
     if config.LOAD_TESSERACT:
@@ -128,9 +140,20 @@ app = FastAPI(
     version=config.VERSION,
 )
 
+app.include_router(auth_router)
+app.include_router(admin_router)
+
 @app.get("/", include_in_schema=False)
 async def read_index():
     return FileResponse(os.path.join(BASE_DIR, 'index.html'))
+
+@app.get("/login", include_in_schema=False)
+async def read_login():
+    return FileResponse(os.path.join(BASE_DIR, 'login.html'))
+
+@app.get("/admin", include_in_schema=False)
+async def read_admin():
+    return FileResponse(os.path.join(BASE_DIR, 'admin.html'))
 
 @app.get("/style.css", include_in_schema=False)
 async def read_style():
@@ -151,6 +174,8 @@ async def ocr_image(
     scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0),
     crop_whitespaces: bool = Form(False),
     use_llm: bool = Form(config.DEFAULT_USE_LLM),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
 ):
     if model.value not in ocr_service.models:
         raise HTTPException(status_code=400, detail=f"Model '{model.value}' not available.")
@@ -171,6 +196,25 @@ async def ocr_image(
             crop_whitespaces=crop_whitespaces,
             use_llm=use_llm
         )
+
+        # Record in database history
+        try:
+            hist = ExtractionHistory(
+                user_id=current_user.id if current_user else None,
+                filename=file.filename or "image.jpg",
+                file_type="image",
+                pages_count=1,
+                primary_model=model.value,
+                secondary_model=secondary_model.value if secondary_model else None,
+                use_llm=use_llm,
+                ocr_duration=result.get("ocr_duration", 0.0),
+                llm_duration=result.get("llm_duration", -1.0)
+            )
+            db.add(hist)
+            await db.commit()
+        except Exception:
+            pass
+
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -188,6 +232,8 @@ async def ocr_pdf(
     scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0),
     crop_whitespaces: bool = Form(False),
     use_llm: bool = Form(config.DEFAULT_USE_LLM),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
 ):
     if model.value not in ocr_service.models:
         raise HTTPException(status_code=400, detail=f"Model '{model.value}' not available.")
@@ -210,6 +256,27 @@ async def ocr_pdf(
             crop_whitespaces=crop_whitespaces,
             use_llm=use_llm
         )
+
+        # Record in database history
+        try:
+            total_ocr = sum(p.get("ocr_duration", 0.0) for p in results) if results else 0.0
+            total_llm = sum(p.get("llm_duration", 0.0) for p in results if p.get("llm_duration", -1) > 0)
+            hist = ExtractionHistory(
+                user_id=current_user.id if current_user else None,
+                filename=file.filename or "document.pdf",
+                file_type="pdf",
+                pages_count=len(results),
+                primary_model=model.value,
+                secondary_model=secondary_model.value if secondary_model else None,
+                use_llm=use_llm,
+                ocr_duration=total_ocr,
+                llm_duration=total_llm if total_llm > 0 else -1.0
+            )
+            db.add(hist)
+            await db.commit()
+        except Exception:
+            pass
+
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

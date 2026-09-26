@@ -2,3 +2,8 @@
 1892863_736.jpg
 __pycache__/
 .env
+data/
+*/data/
+*.db
+.venv/
+
