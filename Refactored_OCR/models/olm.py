@@ -5,10 +5,11 @@ from openai import OpenAI
 from .base import BaseOCRModel
 
 class OlmOCRModel(BaseOCRModel):
-    def __init__(self, api_key, base_url, default_langs=None):
+    def __init__(self, api_key, base_url, default_langs=None, model_name=None):
         self.api_key = api_key
         self.base_url = base_url
         self.default_langs = default_langs if default_langs else ["fas", "eng"]
+        self.model_name = model_name or "allenai/olmocr-2-7b"
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
 
     def process(self, image: Image.Image, lang: str = None) -> str:
@@ -46,7 +47,7 @@ class OlmOCRModel(BaseOCRModel):
         ]
 
         response = self.client.chat.completions.create(
-            model="olmOCR-2-7B-1025-Q8_0.gguf",
+            model=self.model_name,
             messages=messages,
             max_tokens=8000
         )

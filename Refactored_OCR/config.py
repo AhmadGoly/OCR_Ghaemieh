@@ -1,6 +1,6 @@
 import os
 
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 
 try:
     from dotenv import load_dotenv
@@ -25,6 +25,7 @@ LOAD_VARCO = get_bool_env("LOAD_VARCO", False)
 LOAD_OLMOCR_2B = get_bool_env("LOAD_OLMOCR_2B", True)
 
 OLMOCR_LLM_URL_V1 = os.environ.get("OLMOCR_LLM_URL_V1", "http://172.16.20.16:12346/v1")
+OLMOCR_MODEL_NAME = os.environ.get("OLMOCR_MODEL_NAME", "allenai/olmocr-2-7b")
 OLMOCR_API_KEY = os.environ.get("OLMOCR_API_KEY", "no-key")
 
 # FastAPI server configuration

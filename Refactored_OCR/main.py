@@ -89,7 +89,8 @@ async def lifespan(app: FastAPI):
         loaded_models['olmocr_2b'] = OlmOCRModel(
             api_key=config.OLMOCR_API_KEY,
             base_url=config.OLMOCR_LLM_URL_V1,
-            default_langs=config.DEFAULT_LANG.split('+')
+            default_langs=config.DEFAULT_LANG.split('+'),
+            model_name=config.OLMOCR_MODEL_NAME
         )
         print("OlmOCR model loaded.")
 

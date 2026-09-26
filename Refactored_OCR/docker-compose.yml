@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   ocr:
+    build: .
     image: ghaemieh-ocr:11.22.2025.ubuntu
     container_name: ghaemieh-ocr-refactored
     working_dir: /app
