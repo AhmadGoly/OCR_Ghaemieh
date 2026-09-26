@@ -9,17 +9,17 @@ from core.security import generate_raw_api_key
 router = APIRouter(prefix="/api/user", tags=["User Token & API Key"])
 
 
-@router.get("/token", summary="دریافت کلید API فعال کاربر (Get Active API Token)")
+@router.get("/token", summary="Get Active API Token")
 async def get_my_token(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    دریافت کلید API فعال کاربر جهت استفاده در هدر درخواست‌های OCR.
+    Retrieve the active API key for the authenticated user for programmatic OCR requests.
     
-    این کلید را می‌توانید به دو صورت ارسال کنید:
-    - هدر `X-API-Key: sk-gh-...`
-    - هدر `Authorization: Bearer sk-gh-...`
+    This token can be passed via:
+    - Header `X-API-Key: sk-gh-...`
+    - Header `Authorization: Bearer sk-gh-...`
     """
     stmt = (
         select(ApiKey)
@@ -52,15 +52,14 @@ async def get_my_token(
     }
 
 
-@router.post("/token/regenerate", summary="تولید مجدد کلید API تصادفی (Regenerate API Token)")
+@router.post("/token/regenerate", summary="Regenerate API Token")
 async def regenerate_my_token(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    ابطال کلیه توکن‌های قبلی کاربر و صدور فوری یک کلید API تصادفی جدید با پیشوند `sk-gh-...`.
-    
-    پس از فراخوانی این متد، درخواست‌های بعدی حتماً باید با توکن جدید ارسال شوند.
+    Revoke all previous API keys for the current user and immediately issue a fresh sk-gh-... token.
+    Subsequent API requests must use the newly generated token.
     """
     stmt = select(ApiKey).where(ApiKey.user_id == current_user.id, ApiKey.is_active == True)
     result = await db.execute(stmt)

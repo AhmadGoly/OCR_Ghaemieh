@@ -2,13 +2,20 @@ import asyncio
 import io
 import os
 import sys
+import time
+from datetime import datetime, timezone
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 import tempfile
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
+
+import json
+import socket
+import urllib.request
+import urllib.error
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, RedirectResponse
@@ -53,18 +60,32 @@ class ModelName(str, Enum):
 # --- Pydantic Models for API Documentation ---
 
 class BaseOCRResponse(BaseModel):
-    text: str = Field(..., description="متن نهایی استخراج‌شده از سند یا تصویر.")
-    ocr_model: str = Field(..., description="نام مدل هوش مصنوعی استفاده‌شده برای پردازش.")
-    secondary_model: Optional[str] = Field(None, description="نام مدل دوم مورد استفاده در ترکیب دوگانه (در صورت فعال بودن).")
-    ocr_duration: float = Field(..., description="مدت زمان پردازش موتور بینایی (ثانیه).")
-    llm_duration: float = Field(..., description="مدت زمان تصحیح یا ادغام هوشمند توسط LLM (ثانیه). مقدار ۱- به معنی عدم استفاده است.")
+    text: str = Field(..., description="Final extracted plain text from the document or image.")
+    ocr_model: str = Field(..., description="Name of the vision or OCR model used for extraction.")
+    secondary_model: Optional[str] = Field(None, description="Secondary model name if dual-model merging was enabled.")
+    ocr_duration: float = Field(..., description="Vision/OCR extraction processing time in seconds.")
+    llm_duration: float = Field(..., description="LLM text reconciliation/cleaning duration in seconds (-1.0 if not used).")
 
 class ImageOCRResponse(BaseOCRResponse):
-    original_image: Optional[str] = Field(None, description="تصویر ورودی اولیه با کدگذاری Base64.")
-    processed_image: Optional[str] = Field(None, description="تصویر پس از فیلترهای بهینه‌سازی با کدگذاری Base64.")
+    original_image: Optional[str] = Field(None, description="Base64-encoded raw input image.")
+    processed_image: Optional[str] = Field(None, description="Base64-encoded preprocessed/enhanced image.")
 
 class PDFPageOCRResponse(BaseOCRResponse):
-    page: int = Field(..., description="شماره صفحه پردازش‌شده سند.")
+    page: int = Field(..., description="Processed document page number.")
+
+class ServiceHealthDetail(BaseModel):
+    service: str = Field(..., description="Service identifier (e.g. LLM, OLM).")
+    url: str = Field(..., description="Probed health check URL.")
+    status: str = Field(..., description="Health status ('online', 'timeout', 'offline', or 'error').")
+    status_code: Optional[int] = Field(None, description="HTTP status code received (200, 404, 500, etc.).")
+    response: Optional[Any] = Field(None, description="Parsed JSON response payload or raw text (e.g. {'status':'ok'}).")
+    response_time_ms: Optional[float] = Field(None, description="Response time in milliseconds.")
+    error: Optional[str] = Field(None, description="Error or timeout description if the probe failed.")
+
+class HealthStatusResponse(BaseModel):
+    status: str = Field(..., description="Overall health state ('healthy', 'degraded', or 'unhealthy').")
+    timestamp: str = Field(..., description="ISO 8601 UTC timestamp of the health check probe.")
+    services: Dict[str, ServiceHealthDetail] = Field(..., description="Health details for remote inference services.")
 
 # Concurrency & Worker Resources
 ocr_service = None
@@ -148,7 +169,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     lifespan=lifespan,
-    title="سامانه استخراج هوشمند متن قائمیه (Ghaemieh OCR API)",
+    title="Ghaemieh Intelligent OCR API",
     version=config.VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -156,31 +177,31 @@ app = FastAPI(
 
 # Custom OpenAPI Schema with Token Auth & User-Centric Documentation
 API_DOCUMENTATION_MARKDOWN = """
-## راهنمای استفاده و احراز هویت با توکن اختصاصی (API Token Guide)
+## Authentication & API Token Guide
 
-کلیه درخواست‌ها به این سامانه نیازمند احراز هویت از طریق **توکن اختصاصی (API Token)** می‌باشند. هر کاربر دارای یک توکن یکتا با پیشوند `sk-gh-...` است که می‌تواند در تمامی درخواست‌های برنامه‌نویسی و وب‌سرویس مورد استفاده قرار گیرد.
+All document extraction endpoints require authentication using a **dedicated API token (`sk-gh-...`)** or a **JWT Bearer token**. Every registered user is assigned a unique API key that can be copied or regenerated from the web portal.
 
 ---
 
-### ۱. نحوه ارسال توکن در هدر درخواست
+### 1. Sending Authentication in Request Headers
 
-شما می‌توانید توکن اختصاصی خود را به یکی از دو روش زیر ارسال نمایید:
+Authenticate your HTTP requests using either of the following standard headers:
 
-#### الف) هدر اختصاصی `X-API-Key` (روش پیشنهادی و استاندارد):
+#### A) Dedicated `X-API-Key` Header (Recommended):
 ```http
 X-API-Key: sk-gh-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-#### ب) هدر استاندارد `Authorization`:
+#### B) Standard `Authorization` Header:
 ```http
 Authorization: Bearer sk-gh-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ---
 
-### ۲. نمونه فراخوانی‌ها
+### 2. Code Examples
 
-#### نمونه ۱: استخراج متن از تصویر با cURL
+#### Example 1: Extract Text from an Image using cURL
 ```bash
 curl -X POST "http://localhost:4567/ocr/image" \\
   -H "X-API-Key: YOUR_API_TOKEN" \\
@@ -191,7 +212,7 @@ curl -X POST "http://localhost:4567/ocr/image" \\
   -F "contrast=true"
 ```
 
-#### نمونه ۲: استخراج متن از سند چندصفحه‌ای PDF با Python
+#### Example 2: Extract Text from a Multi-Page PDF using Python
 ```python
 import requests
 
@@ -216,15 +237,15 @@ print(response.json())
 
 ---
 
-### ۳. کلیدهای آزمایشی مستقیم در Swagger
-برای تست مستقیم اندپوینت‌ها در این صفحه، بر روی دکمه سبز رنگ **Authorize** در بالای صفحه کلیک کرده و توکن خود را در قسمت `ApiKeyAuth` یا `BearerAuth` وارد نمایید.
+### 3. Interactive Testing in Swagger UI
+Click the green **Authorize** button at the top right of this documentation page and enter your API token in either `ApiKeyAuth` or `BearerAuth` to test the endpoints directly from your browser.
 """
 
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
     openapi_schema = get_openapi(
-        title="سامانه استخراج هوشمند متن قائمیه (Ghaemieh OCR API)",
+        title="Ghaemieh Intelligent OCR API",
         version=config.VERSION,
         description=API_DOCUMENTATION_MARKDOWN,
         routes=app.routes,
@@ -234,12 +255,12 @@ def custom_openapi():
             "type": "apiKey",
             "in": "header",
             "name": "X-API-Key",
-            "description": "توکن اختصاصی خود را وارد نمایید (مثال: sk-gh-...)"
+            "description": "Enter your dedicated API key (e.g. sk-gh-...)"
         },
         "BearerAuth": {
             "type": "http",
             "scheme": "bearer",
-            "description": "توکن دسترسی JWT یا کلید API"
+            "description": "JWT access token or Bearer API key"
         }
     }
     openapi_schema["security"] = [{"ApiKeyAuth": []}, {"BearerAuth": []}]
@@ -302,29 +323,29 @@ async def read_script():
     "/ocr/image",
     response_model=ImageOCRResponse,
     tags=["OCR Extraction"],
-    summary="استخراج هوشمند متن از تصویر (Extract Text from Image)"
+    summary="Extract Text from Image"
 )
 async def ocr_image(
-    file: UploadFile = File(..., description="فایل تصویر (JPG, PNG, TIFF)"),
-    lang: str = Form(config.DEFAULT_LANG, description="زبان‌های موجود در سند (مانند eng+ara+fas)"),
-    model: ModelName = Form(config.DEFAULT_MODEL, description="مدل بینایی اصلی استخراج متن"),
-    secondary_model: Optional[ModelName] = Form(None, description="مدل دوم اختیاری جهت مقایسه و ادغام هوشمند"),
-    preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="تبدیل به مقیاس خاکستری"),
-    contrast: bool = Form(config.DEFAULT_CONTRAST, description="بهبود خودکار کنتراست (CLAHE)"),
-    scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0, description="ضریب مقیاس‌بندی ابعاد تصویر"),
-    crop_whitespaces: bool = Form(False, description="برش حاشیه‌های خالی سند"),
-    use_llm: bool = Form(config.DEFAULT_USE_LLM, description="فعال‌سازی تصحیح و ادغام هوشمند با مدل زبانی"),
+    file: UploadFile = File(..., description="Document image file (JPG, PNG, TIFF, etc.)"),
+    lang: str = Form(config.DEFAULT_LANG, description="Document language codes (e.g. eng+ara+fas)"),
+    model: ModelName = Form(config.DEFAULT_MODEL, description="Primary AI vision/OCR model"),
+    secondary_model: Optional[ModelName] = Form(None, description="Optional secondary model for dual-model reconciliation"),
+    preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="Convert to grayscale with adaptive thresholding"),
+    contrast: bool = Form(config.DEFAULT_CONTRAST, description="Automatic contrast enhancement (CLAHE)"),
+    scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0, description="Image dimension rescaling multiplier"),
+    crop_whitespaces: bool = Form(False, description="Auto-crop document white margins"),
+    use_llm: bool = Form(config.DEFAULT_USE_LLM, description="Enable LLM post-processing and text merging"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    پردازش موازی و با کارایی بالای تصویر با استفاده از موتورهای بینایی ماشین (VLM / OCR).
+    High-performance parallel OCR text extraction from image files.
     
-    - این متد روی استخر ریسمان اختصاصی (Thread Pool) اجرا شده و ترافیک موازی را بدون قفل کردن سرور پردازش می‌کند.
-    - ارسال توکن اختصاصی در هدر `X-API-Key` یا `Authorization: Bearer` الزامی است.
+    - Executed on a dedicated thread pool to ensure non-blocking concurrent request handling.
+    - Requires authentication via `X-API-Key` or `Authorization: Bearer <token>`.
     """
     if model.value not in ocr_service.models:
-        raise HTTPException(status_code=400, detail=f"مدل '{model.value}' در سرور فعال نیست.")
+        raise HTTPException(status_code=400, detail=f"Model '{model.value}' is not active on this server.")
 
     image_data = await file.read()
     image = Image.open(io.BytesIO(image_data))
@@ -374,30 +395,31 @@ async def ocr_image(
     "/ocr/pdf",
     response_model=List[PDFPageOCRResponse],
     tags=["OCR Extraction"],
-    summary="استخراج هوشمند متن از سند PDF (Extract Text from PDF Document)"
+    summary="Extract Text from PDF Document"
 )
 async def ocr_pdf(
-    file: UploadFile = File(..., description="فایل سند PDF"),
-    lang: str = Form(config.DEFAULT_LANG, description="زبان‌های سند (مانند eng+ara+fas)"),
-    model: ModelName = Form(config.DEFAULT_MODEL, description="مدل بینایی اصلی"),
-    secondary_model: Optional[ModelName] = Form(None, description="مدل دوم اختیاری"),
-    start_page: int = Form(1, gt=0, description="صفحه شروع استخراج (پیش‌فرض: ۱)"),
-    end_page: Optional[int] = Form(None, gt=0, description="صفحه پایان استخراج (اختیاری)"),
-    preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="پیش‌پردازش خاکستری"),
-    contrast: bool = Form(config.DEFAULT_CONTRAST, description="بهبود کنتراست تصویر"),
-    scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0, description="ضریب مقیاس"),
-    crop_whitespaces: bool = Form(False, description="برش حاشیه‌ها"),
-    use_llm: bool = Form(config.DEFAULT_USE_LLM, description="تصحیح و ادغام هوشمند با LLM"),
+    file: UploadFile = File(..., description="PDF document file"),
+    lang: str = Form(config.DEFAULT_LANG, description="Document language codes (e.g. eng+ara+fas)"),
+    model: ModelName = Form(config.DEFAULT_MODEL, description="Primary AI vision/OCR model"),
+    secondary_model: Optional[ModelName] = Form(None, description="Optional secondary model for dual-model reconciliation"),
+    start_page: int = Form(1, gt=0, description="Starting page number (default: 1)"),
+    end_page: Optional[int] = Form(None, gt=0, description="Ending page number (optional)"),
+    preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="Convert to grayscale with adaptive thresholding"),
+    contrast: bool = Form(config.DEFAULT_CONTRAST, description="Automatic contrast enhancement (CLAHE)"),
+    scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0, description="Image dimension rescaling multiplier"),
+    crop_whitespaces: bool = Form(False, description="Auto-crop document white margins"),
+    use_llm: bool = Form(config.DEFAULT_USE_LLM, description="Enable LLM post-processing and text merging"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    استخراج سریع و موازی متن از اسناد چندصفحه‌ای PDF.
+    Parallel multi-page OCR text extraction from PDF documents.
     
-    صفحات سند به‌صورت چندریسمانی و موازی پردازش می‌شوند تا زمان انتظار به حداقل برسد.
+    - Converts and extracts PDF pages concurrently across thread pool workers to minimize latency.
+    - Requires authentication via `X-API-Key` or `Authorization: Bearer <token>`.
     """
     if model.value not in ocr_service.models:
-        raise HTTPException(status_code=400, detail=f"مدل '{model.value}' در سرور فعال نیست.")
+        raise HTTPException(status_code=400, detail=f"Model '{model.value}' is not active on this server.")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(await file.read())
@@ -450,20 +472,151 @@ async def ocr_pdf(
         if os.path.exists(pdf_path):
             os.unlink(pdf_path)
 
+# --- Health & Status Monitoring Endpoints ---
+
+def sync_probe_service_health(name: str, url: str, timeout: float) -> dict:
+    """Probes a remote service's /health endpoint using Python's standard library urllib."""
+    start_time = time.perf_counter()
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Ghaemieh-OCR-HealthProbe/1.0",
+            "Accept": "application/json, text/plain, */*"
+        }
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            raw_body = response.read().decode("utf-8", errors="replace")
+            try:
+                payload = json.loads(raw_body)
+            except Exception:
+                payload = raw_body
+
+            code = response.getcode()
+            is_ok = (200 <= code < 300)
+            return {
+                "service": name,
+                "url": url,
+                "status": "online" if is_ok else "error",
+                "status_code": code,
+                "response": payload,
+                "response_time_ms": latency_ms,
+                "error": None if is_ok else f"HTTP status {code}"
+            }
+    except urllib.error.HTTPError as e:
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        raw_body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else ""
+        try:
+            payload = json.loads(raw_body)
+        except Exception:
+            payload = raw_body
+        return {
+            "service": name,
+            "url": url,
+            "status": "error",
+            "status_code": e.code,
+            "response": payload,
+            "response_time_ms": latency_ms,
+            "error": f"HTTP {e.code}: {e.reason}"
+        }
+    except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        is_timeout = (
+            isinstance(e, (socket.timeout, TimeoutError))
+            or (isinstance(e, urllib.error.URLError) and isinstance(e.reason, (socket.timeout, TimeoutError)))
+            or "timed out" in str(e).lower()
+        )
+        if is_timeout:
+            return {
+                "service": name,
+                "url": url,
+                "status": "timeout",
+                "status_code": None,
+                "response": None,
+                "response_time_ms": latency_ms,
+                "error": f"Request timed out after {timeout} seconds"
+            }
+        return {
+            "service": name,
+            "url": url,
+            "status": "offline",
+            "status_code": None,
+            "response": None,
+            "response_time_ms": latency_ms,
+            "error": f"Connection error: {e.reason if isinstance(e, urllib.error.URLError) else str(e)}"
+        }
+    except Exception as e:
+        latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        return {
+            "service": name,
+            "url": url,
+            "status": "offline",
+            "status_code": None,
+            "response": None,
+            "response_time_ms": latency_ms,
+            "error": f"Unexpected error: {str(e)}"
+        }
+
+@app.get(
+    "/health/status",
+    response_model=HealthStatusResponse,
+    tags=["System Health"],
+    summary="Check Remote LLM & OLM Health Status"
+)
+@app.get(
+    "/status",
+    response_model=HealthStatusResponse,
+    tags=["System Health"],
+    summary="Check Remote LLM & OLM Health Status (Alias)",
+    include_in_schema=False
+)
+async def check_remote_services_status():
+    """
+    Checks connectivity and health of the remote LLM (Gemma/Merger) and OLM (OlmOCR) services.
+    
+    Probes the `/health` endpoint of each server using Python's standard library and reports
+    whether it is online (e.g. `{"status":"ok"}`), timed out, or offline, along with response latency in milliseconds.
+    """
+    timeout = config.HEALTH_CHECK_TIMEOUT
+    llm_url = config.get_llm_health_url()
+    olm_url = config.get_olm_health_url()
+
+    llm_task = asyncio.to_thread(sync_probe_service_health, "LLM", llm_url, timeout)
+    olm_task = asyncio.to_thread(sync_probe_service_health, "OLM", olm_url, timeout)
+    llm_res, olm_res = await asyncio.gather(llm_task, olm_task)
+
+    statuses = [llm_res["status"], olm_res["status"]]
+    if all(s == "online" for s in statuses):
+        overall_status = "healthy"
+    elif any(s == "online" for s in statuses):
+        overall_status = "degraded"
+    else:
+        overall_status = "unhealthy"
+
+    return {
+        "status": overall_status,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "services": {
+            "llm": llm_res,
+            "olm": olm_res
+        }
+    }
+
 @app.get(
     "/health/models",
     tags=["System Health"],
-    summary="بررسی وضعیت مدل‌های بارگذاری‌شده (Check Loaded Models Health)"
+    summary="Check Loaded Models Readiness"
 )
 def health_models():
-    """وضعیت آمادگی موتورهای بینایی و هوش مصنوعی بارگذاری‌شده در حافظه."""
+    """Returns the readiness status of all AI vision and OCR models currently loaded in memory."""
     if not ocr_service or not ocr_service.models:
         return {}
     return {model: "loaded" for model in ocr_service.models}
 
 @app.get("/health/config", include_in_schema=False)
 def health_config():
-    """تنظیمات محیطی و پارامترهای فعال سامانه با ماسک‌گذاری کلیدهای محرمانه."""
+    """Runtime configuration and active parameters with masked secrets."""
     return config.get_config_dict()
 
 if __name__ == "__main__":

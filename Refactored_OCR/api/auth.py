@@ -11,21 +11,25 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(..., min_length=1, max_length=64)
-    password: str = Field(..., min_length=1, max_length=128)
+    username: str = Field(..., min_length=1, max_length=64, description="User account username")
+    password: str = Field(..., min_length=1, max_length=128, description="User account password")
 
 
 class UserResponse(BaseModel):
-    id: int
-    username: str
-    is_admin: bool
-    is_active: bool
-    created_version: str = None
+    id: int = Field(..., description="User ID")
+    username: str = Field(..., description="Username")
+    is_admin: bool = Field(..., description="Administrator privileges flag")
+    is_active: bool = Field(..., description="Active account status")
+    created_version: str = Field(None, description="Platform version when created")
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    summary="User Login",
+    description="Authenticates user credentials, returns a JWT bearer access token, and sets a secure session cookie."
+)
 async def login(req: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
-    """Authenticates credentials, returns JWT token, and sets secure cookie."""
+    """Authenticates credentials, returns JWT bearer token, and sets secure session cookie."""
     stmt = select(User).where(User.username == req.username)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()

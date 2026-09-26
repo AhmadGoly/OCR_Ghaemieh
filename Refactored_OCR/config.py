@@ -1,6 +1,6 @@
 import os
 
-VERSION = "3.2.0"
+VERSION = "3.3.0"
 
 try:
     from dotenv import load_dotenv
@@ -47,6 +47,33 @@ OLMOCR_API_KEY = os.environ.get("OLMOCR_API_KEY", "no-key")
 GEMMA4_LLM_URL = os.environ.get("GEMMA4_LLM_URL", os.environ.get("DEFAULT_LLM_URL", "http://10.0.38.50:50015/v1"))
 GEMMA4_MODEL_NAME = os.environ.get("GEMMA4_MODEL_NAME", os.environ.get("DEFAULT_LLM_MODEL_NAME", "/models/gemma-4-26B-A4B-it-Q8_0.gguf"))
 GEMMA4_API_KEY = os.environ.get("GEMMA4_API_KEY", os.environ.get("DEFAULT_LLM_API_KEY", "no-key"))
+
+# Remote Health Probing Configuration
+HEALTH_CHECK_TIMEOUT = float(os.environ.get("HEALTH_CHECK_TIMEOUT", 5.0))
+LLM_HEALTH_URL = os.environ.get("LLM_HEALTH_URL", "")
+OLMOCR_HEALTH_URL = os.environ.get("OLMOCR_HEALTH_URL", "")
+
+
+def get_llm_health_url() -> str:
+    """Derive target health URL for the primary LLM / Gemma server."""
+    if LLM_HEALTH_URL:
+        return LLM_HEALTH_URL
+    base = GEMMA4_LLM_URL or DEFAULT_LLM_URL
+    cleaned = base.strip().rstrip("/")
+    if cleaned.endswith("/v1"):
+        cleaned = cleaned[:-3].rstrip("/")
+    return f"{cleaned}/health"
+
+
+def get_olm_health_url() -> str:
+    """Derive target health URL for the OlmOCR server."""
+    if OLMOCR_HEALTH_URL:
+        return OLMOCR_HEALTH_URL
+    base = OLMOCR_LLM_URL_V1
+    cleaned = base.strip().rstrip("/")
+    if cleaned.endswith("/v1"):
+        cleaned = cleaned[:-3].rstrip("/")
+    return f"{cleaned}/health"
 
 # FastAPI server configuration
 FASTAPI_PORT = int(os.environ.get("FASTAPI_PORT", 4567))
@@ -110,6 +137,11 @@ def get_config_dict() -> dict:
             "model_name": DEFAULT_LLM_MODEL_NAME,
             "api_key": mask_secret(DEFAULT_LLM_API_KEY),
         },
+        "remote_services_health": {
+            "timeout_seconds": HEALTH_CHECK_TIMEOUT,
+            "llm_health_url": get_llm_health_url(),
+            "olm_health_url": get_olm_health_url(),
+        },
         "defaults": {
             "model": DEFAULT_MODEL,
             "lang": DEFAULT_LANG,
@@ -149,6 +181,10 @@ def print_startup_banner() -> None:
     print(f"   - Endpoint:         {cfg['llm_merger']['endpoint']}", flush=True)
     print(f"   - Model:            {cfg['llm_merger']['model_name']}", flush=True)
     print(f"   - API Key:          {cfg['llm_merger']['api_key']}", flush=True)
+    print(f" [Remote Health Check]", flush=True)
+    print(f"   - LLM Health:       {cfg['remote_services_health']['llm_health_url']}", flush=True)
+    print(f"   - OlmOCR Health:    {cfg['remote_services_health']['olm_health_url']}", flush=True)
+    print(f"   - Probe Timeout:    {cfg['remote_services_health']['timeout_seconds']}s", flush=True)
     print(f" [Inference Defaults]", flush=True)
     print(f"   - Primary Model:    {cfg['defaults']['model']}", flush=True)
     print(f"   - Default Lang:     {cfg['defaults']['lang']}", flush=True)
