@@ -1,17 +1,16 @@
-version: "3.9"
-
 services:
   ocr:
     build: .
     image: ghaemieh-ocr:11.22.2025.ubuntu
     container_name: ghaemieh-ocr-refactored
     working_dir: /app
-    command: python main.py
+    command: python -u main.py
     ports:
       - "3334:4567"
     env_file:
       - .env
     environment:
       FASTAPI_PORT: 4567
+      PYTHONUNBUFFERED: "1"
     volumes:
       - ./:/app

@@ -1,6 +1,8 @@
 import io
 import os
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(line_buffering=True)
 import tempfile
 from typing import List, Optional
 from contextlib import asynccontextmanager

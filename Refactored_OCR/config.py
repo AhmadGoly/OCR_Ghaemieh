@@ -1,6 +1,6 @@
 import os
 
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 
 try:
     from dotenv import load_dotenv
@@ -124,6 +124,6 @@ def print_startup_banner() -> None:
     print(f"   - Preprocess:       {cfg['defaults']['preprocess']}")
     print(f"   - Contrast:         {cfg['defaults']['contrast']}")
     print(f"   - Rescale Factor:   {cfg['defaults']['scale']}")
-    print(f"   - Whitespace Crop:  Threshold {cfg['defaults']['crop_whitespace_threshold']}")
-    print(f"   - Tessdata Prefix:  {cfg['defaults']['tessdata_prefix']}")
-    print("=" * 68)
+    print(f"   - Whitespace Crop:  Threshold {cfg['defaults']['crop_whitespace_threshold']}", flush=True)
+    print(f"   - Tessdata Prefix:  {cfg['defaults']['tessdata_prefix']}", flush=True)
+    print("=" * 68, flush=True)
