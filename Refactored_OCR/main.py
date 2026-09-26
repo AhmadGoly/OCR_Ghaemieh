@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Refactored OCR Processing API",
-    version="2.0.0",
+    version=config.VERSION,
 )
 
 @app.get("/", include_in_schema=False)
