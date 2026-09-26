@@ -66,14 +66,14 @@ async def login(req: LoginRequest, response: Response, db: AsyncSession = Depend
     }
 
 
-@router.post("/logout")
+@router.post("/logout", include_in_schema=False)
 async def logout(response: Response):
     """Clears authentication session cookie."""
     response.delete_cookie(key="access_token")
     return {"status": "success", "message": "با موفقیت خارج شدید."}
 
 
-@router.get("/me")
+@router.get("/me", include_in_schema=False)
 async def get_me(current_user: User = Depends(get_current_user)):
     """Returns the authenticated user profile."""
     return {

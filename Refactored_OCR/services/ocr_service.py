@@ -89,13 +89,41 @@ class OCRService:
                     crop_whitespaces: bool = False,
                     use_llm: bool = False) -> List[dict]:
         images = PDFUtils.pdf_to_images(pdf_path, start_page, end_page)
+        if not images:
+            return []
+
+        import config
+        import concurrent.futures
+
+        workers = min(len(images), getattr(config, "PDF_PAGE_WORKERS", 4))
+        if workers <= 1:
+            results = []
+            for i, img in enumerate(images, start=start_page):
+                res = self.process_image(img, primary_model_name, secondary_model_name, lang,
+                                         preprocess, contrast, scale, crop_whitespaces, use_llm)
+                res["page"] = i
+                res.pop("original_image", None)
+                res.pop("processed_image", None)
+                results.append(res)
+            return results
+
         results = []
-        for i, img in enumerate(images, start=start_page):
-            res = self.process_image(img, primary_model_name, secondary_model_name, lang,
-                                     preprocess, contrast, scale, crop_whitespaces, use_llm)
-            res["page"] = i
-            # Remove images from result to match original PDF response
-            res.pop("original_image", None)
-            res.pop("processed_image", None)
-            results.append(res)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_page = {
+                executor.submit(
+                    self.process_image,
+                    img, primary_model_name, secondary_model_name, lang,
+                    preprocess, contrast, scale, crop_whitespaces, use_llm
+                ): page_num
+                for page_num, img in enumerate(images, start=start_page)
+            }
+            for future in concurrent.futures.as_completed(future_to_page):
+                page_num = future_to_page[future]
+                res = future.result()
+                res["page"] = page_num
+                res.pop("original_image", None)
+                res.pop("processed_image", None)
+                results.append(res)
+
+        results.sort(key=lambda r: r["page"])
         return results

@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 import sys
@@ -6,10 +7,12 @@ if hasattr(sys.stdout, "reconfigure"):
 import tempfile
 from typing import List, Optional
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
 from PIL import Image
 
@@ -40,31 +43,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # --- Enums for API Documentation ---
 
 class ModelName(str, Enum):
+    gemma4 = "gemma4"
+    olmocr_2b = "olmocr_2b"
     tesseract = "tesseract"
     docling = "docling"
     qwen = "qwen"
     varco = "varco"
-    olmocr_2b = "olmocr_2b"
-    gemma4 = "gemma4"
 
 # --- Pydantic Models for API Documentation ---
 
 class BaseOCRResponse(BaseModel):
-    text: str = Field(..., description="The extracted OCR text from the image or page.")
-    ocr_model: str = Field(..., description="The name of the OCR model used for processing.")
-    secondary_model: Optional[str] = Field(None, description="The name of the secondary OCR model used, if any.")
-    ocr_duration: float = Field(..., description="The time taken for the OCR process in seconds.")
-    llm_duration: float = Field(..., description="The time taken for the LLM enhancement in seconds. A value of -1 indicates that the LLM was not used.")
+    text: str = Field(..., description="متن نهایی استخراج‌شده از سند یا تصویر.")
+    ocr_model: str = Field(..., description="نام مدل هوش مصنوعی استفاده‌شده برای پردازش.")
+    secondary_model: Optional[str] = Field(None, description="نام مدل دوم مورد استفاده در ترکیب دوگانه (در صورت فعال بودن).")
+    ocr_duration: float = Field(..., description="مدت زمان پردازش موتور بینایی (ثانیه).")
+    llm_duration: float = Field(..., description="مدت زمان تصحیح یا ادغام هوشمند توسط LLM (ثانیه). مقدار ۱- به معنی عدم استفاده است.")
 
 class ImageOCRResponse(BaseOCRResponse):
-    original_image: Optional[str] = Field(None, description="Base64 encoded original image.")
-    processed_image: Optional[str] = Field(None, description="Base64 encoded processed image.")
+    original_image: Optional[str] = Field(None, description="تصویر ورودی اولیه با کدگذاری Base64.")
+    processed_image: Optional[str] = Field(None, description="تصویر پس از فیلترهای بهینه‌سازی با کدگذاری Base64.")
 
 class PDFPageOCRResponse(BaseOCRResponse):
-    page: int = Field(..., description="The page number of the processed page.")
+    page: int = Field(..., description="شماره صفحه پردازش‌شده سند.")
 
-# Global shared instance of our service.
+# Concurrency & Worker Resources
 ocr_service = None
+ocr_executor = ThreadPoolExecutor(
+    max_workers=getattr(config, "OCR_THREAD_WORKERS", 24),
+    thread_name_prefix="ocr-worker"
+)
+ocr_semaphore = asyncio.Semaphore(getattr(config, "MAX_CONCURRENT_OCR", 20))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -135,16 +143,129 @@ async def lifespan(app: FastAPI):
     print(f"Startup complete. Models loaded: {list(loaded_models.keys())}")
     print("-" * 20)
     yield
+    print("Shutting down OCR thread pool executor...")
+    ocr_executor.shutdown(wait=False)
 
 app = FastAPI(
     lifespan=lifespan,
-    title="Refactored OCR Processing API",
+    title="سامانه استخراج هوشمند متن قائمیه (Ghaemieh OCR API)",
     version=config.VERSION,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
+# Custom OpenAPI Schema with Token Auth & User-Centric Documentation
+API_DOCUMENTATION_MARKDOWN = """
+## راهنمای استفاده و احراز هویت با توکن اختصاصی (API Token Guide)
+
+کلیه درخواست‌ها به این سامانه نیازمند احراز هویت از طریق **توکن اختصاصی (API Token)** می‌باشند. هر کاربر دارای یک توکن یکتا با پیشوند `sk-gh-...` است که می‌تواند در تمامی درخواست‌های برنامه‌نویسی و وب‌سرویس مورد استفاده قرار گیرد.
+
+---
+
+### ۱. نحوه ارسال توکن در هدر درخواست
+
+شما می‌توانید توکن اختصاصی خود را به یکی از دو روش زیر ارسال نمایید:
+
+#### الف) هدر اختصاصی `X-API-Key` (روش پیشنهادی و استاندارد):
+```http
+X-API-Key: sk-gh-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+#### ب) هدر استاندارد `Authorization`:
+```http
+Authorization: Bearer sk-gh-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+---
+
+### ۲. نمونه فراخوانی‌ها
+
+#### نمونه ۱: استخراج متن از تصویر با cURL
+```bash
+curl -X POST "http://localhost:4567/ocr/image" \\
+  -H "X-API-Key: YOUR_API_TOKEN" \\
+  -F "file=@sample.png" \\
+  -F "model=gemma4" \\
+  -F "lang=eng+ara+fas" \\
+  -F "preprocess=true" \\
+  -F "contrast=true"
+```
+
+#### نمونه ۲: استخراج متن از سند چندصفحه‌ای PDF با Python
+```python
+import requests
+
+url = "http://localhost:4567/ocr/pdf"
+headers = {
+    "X-API-Key": "YOUR_API_TOKEN"
+}
+data = {
+    "model": "gemma4",
+    "lang": "eng+ara+fas",
+    "start_page": 1,
+    "end_page": 5,
+    "use_llm": "true"
+}
+
+with open("document.pdf", "rb") as f:
+    files = {"file": f}
+    response = requests.post(url, headers=headers, data=data, files=files)
+
+print(response.json())
+```
+
+---
+
+### ۳. کلیدهای آزمایشی مستقیم در Swagger
+برای تست مستقیم اندپوینت‌ها در این صفحه، بر روی دکمه سبز رنگ **Authorize** در بالای صفحه کلیک کرده و توکن خود را در قسمت `ApiKeyAuth` یا `BearerAuth` وارد نمایید.
+"""
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="سامانه استخراج هوشمند متن قائمیه (Ghaemieh OCR API)",
+        version=config.VERSION,
+        description=API_DOCUMENTATION_MARKDOWN,
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "توکن اختصاصی خود را وارد نمایید (مثال: sk-gh-...)"
+        },
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "description": "توکن دسترسی JWT یا کلید API"
+        }
+    }
+    openapi_schema["security"] = [{"ApiKeyAuth": []}, {"BearerAuth": []}]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# Register Routers (Internal Admin is excluded from public Swagger docs)
 app.include_router(auth_router)
-app.include_router(admin_router)
+app.include_router(admin_router, include_in_schema=False)
 app.include_router(user_router)
+
+# --- Browser Static & Favicon Routes ---
+
+@app.get("/favicon.svg", include_in_schema=False)
+async def get_favicon_svg():
+    return FileResponse(os.path.join(BASE_DIR, 'favicon.svg'), media_type="image/svg+xml")
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def get_favicon_ico():
+    return FileResponse(os.path.join(BASE_DIR, 'favicon.ico'), media_type="image/x-icon")
+
+@app.get("/favicon.png", include_in_schema=False)
+async def get_favicon_png():
+    return FileResponse(os.path.join(BASE_DIR, 'favicon.png'), media_type="image/png")
 
 @app.get("/", include_in_schema=False)
 async def read_index(request: Request):
@@ -175,39 +296,57 @@ async def read_style():
 async def read_script():
     return FileResponse(os.path.join(BASE_DIR, 'script.js'))
 
-@app.post("/ocr/image", response_model=ImageOCRResponse)
+# --- Main OCR Processing Endpoints (Thread-Pool Offloaded for High Concurrency) ---
+
+@app.post(
+    "/ocr/image",
+    response_model=ImageOCRResponse,
+    tags=["OCR Extraction"],
+    summary="استخراج هوشمند متن از تصویر (Extract Text from Image)"
+)
 async def ocr_image(
-    file: UploadFile = File(...),
-    lang: str = Form(config.DEFAULT_LANG),
-    model: ModelName = Form(config.DEFAULT_MODEL),
-    secondary_model: Optional[ModelName] = Form(None),
-    preprocess: bool = Form(config.DEFAULT_PREPROCESS),
-    contrast: bool = Form(config.DEFAULT_CONTRAST),
-    scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0),
-    crop_whitespaces: bool = Form(False),
-    use_llm: bool = Form(config.DEFAULT_USE_LLM),
+    file: UploadFile = File(..., description="فایل تصویر (JPG, PNG, TIFF)"),
+    lang: str = Form(config.DEFAULT_LANG, description="زبان‌های موجود در سند (مانند eng+ara+fas)"),
+    model: ModelName = Form(config.DEFAULT_MODEL, description="مدل بینایی اصلی استخراج متن"),
+    secondary_model: Optional[ModelName] = Form(None, description="مدل دوم اختیاری جهت مقایسه و ادغام هوشمند"),
+    preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="تبدیل به مقیاس خاکستری"),
+    contrast: bool = Form(config.DEFAULT_CONTRAST, description="بهبود خودکار کنتراست (CLAHE)"),
+    scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0, description="ضریب مقیاس‌بندی ابعاد تصویر"),
+    crop_whitespaces: bool = Form(False, description="برش حاشیه‌های خالی سند"),
+    use_llm: bool = Form(config.DEFAULT_USE_LLM, description="فعال‌سازی تصحیح و ادغام هوشمند با مدل زبانی"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    پردازش موازی و با کارایی بالای تصویر با استفاده از موتورهای بینایی ماشین (VLM / OCR).
+    
+    - این متد روی استخر ریسمان اختصاصی (Thread Pool) اجرا شده و ترافیک موازی را بدون قفل کردن سرور پردازش می‌کند.
+    - ارسال توکن اختصاصی در هدر `X-API-Key` یا `Authorization: Bearer` الزامی است.
+    """
     if model.value not in ocr_service.models:
-        raise HTTPException(status_code=400, detail=f"Model '{model.value}' not available.")
+        raise HTTPException(status_code=400, detail=f"مدل '{model.value}' در سرور فعال نیست.")
 
     image_data = await file.read()
     image = Image.open(io.BytesIO(image_data))
     image.load()
 
     try:
-        result = ocr_service.process_image(
-            image,
-            primary_model_name=model.value,
-            secondary_model_name=secondary_model.value if secondary_model else None,
-            lang=lang,
-            preprocess=preprocess,
-            contrast=contrast,
-            scale=scale,
-            crop_whitespaces=crop_whitespaces,
-            use_llm=use_llm
-        )
+        async with ocr_semaphore:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                ocr_executor,
+                lambda: ocr_service.process_image(
+                    image,
+                    primary_model_name=model.value,
+                    secondary_model_name=secondary_model.value if secondary_model else None,
+                    lang=lang,
+                    preprocess=preprocess,
+                    contrast=contrast,
+                    scale=scale,
+                    crop_whitespaces=crop_whitespaces,
+                    use_llm=use_llm
+                )
+            )
 
         # Record in database history
         try:
@@ -231,43 +370,58 @@ async def ocr_image(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/ocr/pdf", response_model=List[PDFPageOCRResponse])
+@app.post(
+    "/ocr/pdf",
+    response_model=List[PDFPageOCRResponse],
+    tags=["OCR Extraction"],
+    summary="استخراج هوشمند متن از سند PDF (Extract Text from PDF Document)"
+)
 async def ocr_pdf(
-    file: UploadFile = File(...),
-    lang: str = Form(config.DEFAULT_LANG),
-    model: ModelName = Form(config.DEFAULT_MODEL),
-    secondary_model: Optional[ModelName] = Form(None),
-    start_page: int = Form(1, gt=0),
-    end_page: Optional[int] = Form(None, gt=0),
-    preprocess: bool = Form(config.DEFAULT_PREPROCESS),
-    contrast: bool = Form(config.DEFAULT_CONTRAST),
-    scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0),
-    crop_whitespaces: bool = Form(False),
-    use_llm: bool = Form(config.DEFAULT_USE_LLM),
+    file: UploadFile = File(..., description="فایل سند PDF"),
+    lang: str = Form(config.DEFAULT_LANG, description="زبان‌های سند (مانند eng+ara+fas)"),
+    model: ModelName = Form(config.DEFAULT_MODEL, description="مدل بینایی اصلی"),
+    secondary_model: Optional[ModelName] = Form(None, description="مدل دوم اختیاری"),
+    start_page: int = Form(1, gt=0, description="صفحه شروع استخراج (پیش‌فرض: ۱)"),
+    end_page: Optional[int] = Form(None, gt=0, description="صفحه پایان استخراج (اختیاری)"),
+    preprocess: bool = Form(config.DEFAULT_PREPROCESS, description="پیش‌پردازش خاکستری"),
+    contrast: bool = Form(config.DEFAULT_CONTRAST, description="بهبود کنتراست تصویر"),
+    scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0, description="ضریب مقیاس"),
+    crop_whitespaces: bool = Form(False, description="برش حاشیه‌ها"),
+    use_llm: bool = Form(config.DEFAULT_USE_LLM, description="تصحیح و ادغام هوشمند با LLM"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    استخراج سریع و موازی متن از اسناد چندصفحه‌ای PDF.
+    
+    صفحات سند به‌صورت چندریسمانی و موازی پردازش می‌شوند تا زمان انتظار به حداقل برسد.
+    """
     if model.value not in ocr_service.models:
-        raise HTTPException(status_code=400, detail=f"Model '{model.value}' not available.")
+        raise HTTPException(status_code=400, detail=f"مدل '{model.value}' در سرور فعال نیست.")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(await file.read())
         pdf_path = tmp_file.name
 
     try:
-        results = ocr_service.process_pdf(
-            pdf_path=pdf_path,
-            primary_model_name=model.value,
-            secondary_model_name=secondary_model.value if secondary_model else None,
-            lang=lang,
-            start_page=start_page,
-            end_page=end_page,
-            preprocess=preprocess,
-            contrast=contrast,
-            scale=scale,
-            crop_whitespaces=crop_whitespaces,
-            use_llm=use_llm
-        )
+        async with ocr_semaphore:
+            loop = asyncio.get_running_loop()
+            results = await loop.run_in_executor(
+                ocr_executor,
+                lambda: ocr_service.process_pdf(
+                    pdf_path=pdf_path,
+                    primary_model_name=model.value,
+                    secondary_model_name=secondary_model.value if secondary_model else None,
+                    lang=lang,
+                    start_page=start_page,
+                    end_page=end_page,
+                    preprocess=preprocess,
+                    contrast=contrast,
+                    scale=scale,
+                    crop_whitespaces=crop_whitespaces,
+                    use_llm=use_llm
+                )
+            )
 
         # Record in database history
         try:
@@ -296,15 +450,28 @@ async def ocr_pdf(
         if os.path.exists(pdf_path):
             os.unlink(pdf_path)
 
-@app.get("/health/models")
+@app.get(
+    "/health/models",
+    tags=["System Health"],
+    summary="بررسی وضعیت مدل‌های بارگذاری‌شده (Check Loaded Models Health)"
+)
 def health_models():
+    """وضعیت آمادگی موتورهای بینایی و هوش مصنوعی بارگذاری‌شده در حافظه."""
+    if not ocr_service or not ocr_service.models:
+        return {}
     return {model: "loaded" for model in ocr_service.models}
 
-@app.get("/health/config")
+@app.get("/health/config", include_in_schema=False)
 def health_config():
-    """Returns the loaded runtime and environment configuration (with secrets masked)."""
+    """تنظیمات محیطی و پارامترهای فعال سامانه با ماسک‌گذاری کلیدهای محرمانه."""
     return config.get_config_dict()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=config.FASTAPI_PORT)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=config.FASTAPI_PORT,
+        limit_concurrency=100,
+        timeout_keep_alive=65
+    )

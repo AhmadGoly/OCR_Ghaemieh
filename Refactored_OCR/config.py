@@ -1,6 +1,6 @@
 import os
 
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 
 try:
     from dotenv import load_dotenv
@@ -24,6 +24,11 @@ def get_bool_env(var_name: str, default: bool) -> bool:
     if val is None:
         return default
     return val.strip().lower() in ("true", "1", "yes")
+
+# Concurrency & Parallelism Tuning
+MAX_CONCURRENT_OCR = int(os.environ.get("MAX_CONCURRENT_OCR", 20))
+OCR_THREAD_WORKERS = int(os.environ.get("OCR_THREAD_WORKERS", 24))
+PDF_PAGE_WORKERS = int(os.environ.get("PDF_PAGE_WORKERS", 4))
 
 # OCR Model Loading Configuration
 LOAD_TESSERACT = get_bool_env("LOAD_TESSERACT", True)
