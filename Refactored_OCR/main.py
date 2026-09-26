@@ -23,6 +23,7 @@ from models.qwen import QwenModel
 from models.varco import VarcoModel
 from models.docling import DoclingModel
 from models.olm import OlmOCRModel
+from models.gemma import GemmaVLMModel
 from services.merger import LLMMerger
 from services.ocr_service import OCRService
 
@@ -34,6 +35,7 @@ class ModelName(str, Enum):
     qwen = "qwen"
     varco = "varco"
     olmocr_2b = "olmocr_2b"
+    gemma4 = "gemma4"
 
 # --- Pydantic Models for API Documentation ---
 
@@ -96,6 +98,16 @@ async def lifespan(app: FastAPI):
             model_name=config.OLMOCR_MODEL_NAME
         )
         print("OlmOCR model loaded.")
+
+    if config.LOAD_GEMMA4:
+        print("Loading Gemma 4 VLM model...")
+        loaded_models['gemma4'] = GemmaVLMModel(
+            api_key=config.GEMMA4_API_KEY,
+            base_url=config.GEMMA4_LLM_URL,
+            default_langs=config.DEFAULT_LANG.split('+'),
+            model_name=config.GEMMA4_MODEL_NAME
+        )
+        print("Gemma 4 VLM model loaded.")
 
     merger = LLMMerger(
         api_key=config.DEFAULT_LLM_API_KEY,

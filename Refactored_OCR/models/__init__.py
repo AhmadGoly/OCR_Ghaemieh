@@ -4,3 +4,4 @@ from .qwen import QwenModel
 from .varco import VarcoModel
 from .docling import DoclingModel
 from .olm import OlmOCRModel
+from .gemma import GemmaVLMModel

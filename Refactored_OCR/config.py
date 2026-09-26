@@ -1,6 +1,6 @@
 import os
 
-VERSION = "2.1.1"
+VERSION = "2.2.0"
 
 try:
     from dotenv import load_dotenv
@@ -23,16 +23,23 @@ LOAD_DOCLING = get_bool_env("LOAD_DOCLING", False)
 LOAD_QWEN = get_bool_env("LOAD_QWEN", False)
 LOAD_VARCO = get_bool_env("LOAD_VARCO", False)
 LOAD_OLMOCR_2B = get_bool_env("LOAD_OLMOCR_2B", True)
+LOAD_GEMMA4 = get_bool_env("LOAD_GEMMA4", True)
 
+# OlmOCR VLM Engine
 OLMOCR_LLM_URL_V1 = os.environ.get("OLMOCR_LLM_URL_V1", "http://172.16.20.16:12346/v1")
 OLMOCR_MODEL_NAME = os.environ.get("OLMOCR_MODEL_NAME", "allenai/olmocr-2-7b")
 OLMOCR_API_KEY = os.environ.get("OLMOCR_API_KEY", "no-key")
+
+# Gemma 4 VLM OCR Engine
+GEMMA4_LLM_URL = os.environ.get("GEMMA4_LLM_URL", os.environ.get("DEFAULT_LLM_URL", "http://10.0.38.50:50015/v1"))
+GEMMA4_MODEL_NAME = os.environ.get("GEMMA4_MODEL_NAME", os.environ.get("DEFAULT_LLM_MODEL_NAME", "/models/gemma-4-26B-A4B-it-Q8_0.gguf"))
+GEMMA4_API_KEY = os.environ.get("GEMMA4_API_KEY", os.environ.get("DEFAULT_LLM_API_KEY", "no-key"))
 
 # FastAPI server configuration
 FASTAPI_PORT = int(os.environ.get("FASTAPI_PORT", 4567))
 
 # Accepted values for endpoints
-ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco", "olmocr_2b"]
+ACCEPTED_MODELS = ["tesseract", "docling", "qwen", "varco", "olmocr_2b", "gemma4"]
 ACCEPTED_LANGUAGES = ["eng", "ara", "fas"]
 
 # Default endpoint parameters
@@ -42,9 +49,9 @@ DEFAULT_PREPROCESS = get_bool_env("DEFAULT_PREPROCESS", False)
 DEFAULT_CONTRAST = get_bool_env("DEFAULT_CONTRAST", False)
 DEFAULT_SCALE = float(os.environ.get("DEFAULT_SCALE", 1.0))
 DEFAULT_USE_LLM = get_bool_env("DEFAULT_USE_LLM", False)
-DEFAULT_LLM_URL = os.environ.get("DEFAULT_LLM_URL", "http://172.16.20.16:12347/v1")
-DEFAULT_LLM_MODEL_NAME = os.environ.get("DEFAULT_LLM_MODEL_NAME", "gemma-3-27b-it-Q8_0.gguf")
-DEFAULT_LLM_API_KEY = os.environ.get("DEFAULT_LLM_API_KEY", "your_dummy_or_real_key")
+DEFAULT_LLM_URL = os.environ.get("DEFAULT_LLM_URL", "http://10.0.38.50:50015/v1")
+DEFAULT_LLM_MODEL_NAME = os.environ.get("DEFAULT_LLM_MODEL_NAME", "/models/gemma-4-26B-A4B-it-Q8_0.gguf")
+DEFAULT_LLM_API_KEY = os.environ.get("DEFAULT_LLM_API_KEY", "no-key")
 
 # Whitespace cropping threshold
 CROP_WHITESPACE_THRESHOLD = int(os.environ.get("CROP_WHITESPACE_THRESHOLD", 250))
@@ -69,6 +76,7 @@ def get_config_dict() -> dict:
         "models_enabled": {
             "tesseract": LOAD_TESSERACT,
             "olmocr_2b": LOAD_OLMOCR_2B,
+            "gemma4": LOAD_GEMMA4,
             "docling": LOAD_DOCLING,
             "qwen": LOAD_QWEN,
             "varco": LOAD_VARCO,
@@ -77,6 +85,11 @@ def get_config_dict() -> dict:
             "endpoint": OLMOCR_LLM_URL_V1,
             "model_name": OLMOCR_MODEL_NAME,
             "api_key": mask_secret(OLMOCR_API_KEY),
+        },
+        "gemma4_vlm": {
+            "endpoint": GEMMA4_LLM_URL,
+            "model_name": GEMMA4_MODEL_NAME,
+            "api_key": mask_secret(GEMMA4_API_KEY),
         },
         "llm_merger": {
             "default_use_llm": DEFAULT_USE_LLM,
@@ -99,31 +112,36 @@ def get_config_dict() -> dict:
 def print_startup_banner() -> None:
     """Prints a structured banner of all environment & runtime configurations at service startup."""
     cfg = get_config_dict()
-    print("=" * 68)
-    print(f"             GHAEMIEH OCR SERVICE v{cfg['version']}")
-    print("=" * 68)
-    print(f" [Server]              Port: {cfg['server']['port']}")
-    print(f" [Models Enabled]")
-    print(f"   - Tesseract:        {'ENABLED' if cfg['models_enabled']['tesseract'] else 'DISABLED'}")
-    print(f"   - OlmOCR 2B:        {'ENABLED' if cfg['models_enabled']['olmocr_2b'] else 'DISABLED'}")
-    print(f"   - Docling:          {'ENABLED' if cfg['models_enabled']['docling'] else 'DISABLED'}")
-    print(f"   - Qwen VL:          {'ENABLED' if cfg['models_enabled']['qwen'] else 'DISABLED'}")
-    print(f"   - Varco:            {'ENABLED' if cfg['models_enabled']['varco'] else 'DISABLED'}")
-    print(f" [OlmOCR Engine]")
-    print(f"   - Endpoint:         {cfg['olmocr']['endpoint']}")
-    print(f"   - Model:            {cfg['olmocr']['model_name']}")
-    print(f"   - API Key:          {cfg['olmocr']['api_key']}")
-    print(f" [LLM Merger Engine]")
-    print(f"   - Active by default:{'YES' if cfg['llm_merger']['default_use_llm'] else 'NO'}")
-    print(f"   - Endpoint:         {cfg['llm_merger']['endpoint']}")
-    print(f"   - Model:            {cfg['llm_merger']['model_name']}")
-    print(f"   - API Key:          {cfg['llm_merger']['api_key']}")
-    print(f" [Inference Defaults]")
-    print(f"   - Primary Model:    {cfg['defaults']['model']}")
-    print(f"   - Default Lang:     {cfg['defaults']['lang']}")
-    print(f"   - Preprocess:       {cfg['defaults']['preprocess']}")
-    print(f"   - Contrast:         {cfg['defaults']['contrast']}")
-    print(f"   - Rescale Factor:   {cfg['defaults']['scale']}")
+    print("=" * 68, flush=True)
+    print(f"             GHAEMIEH OCR SERVICE v{cfg['version']}", flush=True)
+    print("=" * 68, flush=True)
+    print(f" [Server]              Port: {cfg['server']['port']}", flush=True)
+    print(f" [Models Enabled]", flush=True)
+    print(f"   - Tesseract:        {'ENABLED' if cfg['models_enabled']['tesseract'] else 'DISABLED'}", flush=True)
+    print(f"   - OlmOCR 2B (VLM):  {'ENABLED' if cfg['models_enabled']['olmocr_2b'] else 'DISABLED'}", flush=True)
+    print(f"   - Gemma 4 (VLM):    {'ENABLED' if cfg['models_enabled']['gemma4'] else 'DISABLED'}", flush=True)
+    print(f"   - Docling:          {'ENABLED' if cfg['models_enabled']['docling'] else 'DISABLED'}", flush=True)
+    print(f"   - Qwen VL:          {'ENABLED' if cfg['models_enabled']['qwen'] else 'DISABLED'}", flush=True)
+    print(f"   - Varco:            {'ENABLED' if cfg['models_enabled']['varco'] else 'DISABLED'}", flush=True)
+    print(f" [OlmOCR Engine]", flush=True)
+    print(f"   - Endpoint:         {cfg['olmocr']['endpoint']}", flush=True)
+    print(f"   - Model:            {cfg['olmocr']['model_name']}", flush=True)
+    print(f"   - API Key:          {cfg['olmocr']['api_key']}", flush=True)
+    print(f" [Gemma 4 VLM OCR Engine]", flush=True)
+    print(f"   - Endpoint:         {cfg['gemma4_vlm']['endpoint']}", flush=True)
+    print(f"   - Model:            {cfg['gemma4_vlm']['model_name']}", flush=True)
+    print(f"   - API Key:          {cfg['gemma4_vlm']['api_key']}", flush=True)
+    print(f" [LLM Merger Engine]", flush=True)
+    print(f"   - Active by default:{'YES' if cfg['llm_merger']['default_use_llm'] else 'NO'}", flush=True)
+    print(f"   - Endpoint:         {cfg['llm_merger']['endpoint']}", flush=True)
+    print(f"   - Model:            {cfg['llm_merger']['model_name']}", flush=True)
+    print(f"   - API Key:          {cfg['llm_merger']['api_key']}", flush=True)
+    print(f" [Inference Defaults]", flush=True)
+    print(f"   - Primary Model:    {cfg['defaults']['model']}", flush=True)
+    print(f"   - Default Lang:     {cfg['defaults']['lang']}", flush=True)
+    print(f"   - Preprocess:       {cfg['defaults']['preprocess']}", flush=True)
+    print(f"   - Contrast:         {cfg['defaults']['contrast']}", flush=True)
+    print(f"   - Rescale Factor:   {cfg['defaults']['scale']}", flush=True)
     print(f"   - Whitespace Crop:  Threshold {cfg['defaults']['crop_whitespace_threshold']}", flush=True)
     print(f"   - Tessdata Prefix:  {cfg['defaults']['tessdata_prefix']}", flush=True)
     print("=" * 68, flush=True)
