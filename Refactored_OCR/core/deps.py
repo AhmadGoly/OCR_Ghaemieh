@@ -1,81 +1,128 @@
+import hashlib
 from typing import Optional
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.session import get_db
-from db.models import User
+from db.models import User, ApiKey
 from core.security import decode_access_token
 
 security_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_token_from_request(
-    request: Request,
-    auth: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)
-) -> Optional[str]:
-    """Extracts JWT token from Authorization header or HTTP-only cookie."""
-    if auth and auth.credentials:
-        return auth.credentials
-    # Fallback to cookie
-    return request.cookies.get("access_token")
-
-
 async def get_current_user(
-    token: Optional[str] = Depends(get_token_from_request),
+    request: Request,
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> User:
-    """Authenticates current user or raises 401 Unauthorized."""
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token missing. Please log in."
+    """
+    Authenticates current user using:
+    1. X-API-Key header (API token e.g. sk-gh-...)
+    2. Authorization: Bearer <token> (API key or JWT access token)
+    3. Cookie: access_token (JWT session)
+    Raises 401 Unauthorized if missing, invalid, or expired.
+    """
+    # 1. Check X-API-Key header
+    api_key_header = request.headers.get("x-api-key")
+    if api_key_header:
+        api_key_str = api_key_header.strip()
+        key_hash = hashlib.sha256(api_key_str.encode("utf-8")).hexdigest()
+        stmt = (
+            select(ApiKey)
+            .options(selectinload(ApiKey.user))
+            .where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
         )
+        result = await db.execute(stmt)
+        key_obj = result.scalar_one_or_none()
+        if key_obj and key_obj.user:
+            if not key_obj.user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="حساب کاربری متصل به این کلید غیرفعال است."
+                )
+            return key_obj.user
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="کلید API نامعتبر است یا منقضی شده است."
+            )
 
-    payload = decode_access_token(token)
-    if not payload or "sub" not in payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired authentication session."
-        )
+    # 2. Check Authorization Bearer header
+    raw_bearer = auth.credentials if auth and auth.credentials else None
+    if raw_bearer:
+        raw_bearer = raw_bearer.strip()
+        # If it's formatted as an API key (sk-gh-...)
+        if raw_bearer.startswith("sk-gh-"):
+            key_hash = hashlib.sha256(raw_bearer.encode("utf-8")).hexdigest()
+            stmt = (
+                select(ApiKey)
+                .options(selectinload(ApiKey.user))
+                .where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
+            )
+            result = await db.execute(stmt)
+            key_obj = result.scalar_one_or_none()
+            if key_obj and key_obj.user:
+                if not key_obj.user.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="حساب کاربری متصل به این کلید غیرفعال است."
+                    )
+                return key_obj.user
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="کلید API نامعتبر است یا منقضی شده است."
+                )
+        else:
+            # It's a JWT access token
+            payload = decode_access_token(raw_bearer)
+            if payload and "sub" in payload:
+                stmt = select(User).where(User.username == payload["sub"])
+                result = await db.execute(stmt)
+                user = result.scalar_one_or_none()
+                if user:
+                    if not user.is_active:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="این حساب کاربری غیرفعال شده است."
+                        )
+                    return user
 
-    username = payload["sub"]
-    stmt = select(User).where(User.username == username)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
+    # 3. Check access_token cookie
+    cookie_token = request.cookies.get("access_token")
+    if cookie_token:
+        payload = decode_access_token(cookie_token)
+        if payload and "sub" in payload:
+            stmt = select(User).where(User.username == payload["sub"])
+            result = await db.execute(stmt)
+            user = result.scalar_one_or_none()
+            if user:
+                if not user.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="این حساب کاربری غیرفعال شده است."
+                    )
+                return user
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account no longer exists."
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This account has been deactivated."
-        )
-
-    return user
+    # No valid authentication provided
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="دسترسی غیرمجاز. لطفاً وارد شوید یا توکن معتبر ارسال کنید."
+    )
 
 
 async def get_current_user_optional(
-    token: Optional[str] = Depends(get_token_from_request),
+    request: Request,
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> Optional[User]:
-    """Optional user authentication for mixed public/authenticated views."""
-    if not token:
+    """Returns current user if authenticated, otherwise None without raising."""
+    try:
+        return await get_current_user(request=request, auth=auth, db=db)
+    except HTTPException:
         return None
-    payload = decode_access_token(token)
-    if not payload or "sub" not in payload:
-        return None
-    username = payload["sub"]
-    stmt = select(User).where(User.username == username)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-    if user and user.is_active:
-        return user
-    return None
 
 
 async def require_admin(
@@ -85,6 +132,6 @@ async def require_admin(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Administrator privileges required for this action."
+            detail="دسترسی به این بخش نیازمند دسترسی مدیریت (Admin) است."
         )
     return current_user

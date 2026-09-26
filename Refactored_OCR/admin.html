@@ -58,18 +58,22 @@
                     <div>
                         <div class="flex items-center space-x-2 space-x-reverse">
                             <span class="text-sm font-black text-white">سامانه OCR قائمیه</span>
-                            <span class="text-[10px] uppercase font-bold tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full" x-text="'نسخه ' + (stats.version || '3.0.0')"></span>
+                            <span class="text-[10px] uppercase font-bold tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full" x-text="'نسخه ' + (stats.version || '3.1.0')"></span>
                         </div>
                         <p class="text-[11px] text-slate-400">پنل مدیریت کاربران و پایش سرویس‌ها</p>
                     </div>
                 </div>
 
                 <div class="flex items-center space-x-3 space-x-reverse">
+                    <button @click="openAdminTokenModal()" class="px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-300 hover:text-white text-xs font-medium transition flex items-center space-x-1.5 space-x-reverse shadow-md shadow-red-950/20">
+                        <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                        <span>توکن اختصاصی من</span>
+                    </button>
                     <a href="/" class="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 hover:text-white text-xs font-medium transition flex items-center space-x-1.5 space-x-reverse">
                         <i data-lucide="scan-text" class="w-4 h-4"></i>
                         <span>استودیو OCR</span>
                     </a>
-                    <button @click="logout()" class="px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-300 hover:text-white text-xs font-medium transition flex items-center space-x-1.5 space-x-reverse">
+                    <button @click="logout()" class="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 hover:text-white text-xs font-medium transition flex items-center space-x-1.5 space-x-reverse">
                         <i data-lucide="log-out" class="w-4 h-4"></i>
                         <span>خروج</span>
                     </button>
@@ -85,7 +89,7 @@
                 <div class="absolute -right-20 -top-20 w-60 h-60 bg-red-600/10 rounded-full blur-[80px] pointer-events-none"></div>
                 <div class="relative z-10">
                     <h2 class="text-xl font-black text-white">مدیریت کاربران و دسترسی‌ها</h2>
-                    <p class="text-xs text-slate-400 mt-1">تعریف کاربران جدید، مدیریت رمز عبور و نظارت بر سلامت مدل‌های بینایی ماشین (VLM).</p>
+                    <p class="text-xs text-slate-400 mt-1">تعریف کاربران جدید، مدیریت توکن‌های اختصاصی و نظارت بر سلامت مدل‌های بینایی ماشین (VLM).</p>
                 </div>
                 <div class="flex items-center space-x-3 space-x-reverse relative z-10">
                     <button @click="refreshData()" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5 space-x-reverse">
@@ -149,7 +153,7 @@
                 <div class="p-5 border-b border-zinc-800/80 flex items-center justify-between">
                     <div>
                         <h3 class="text-sm font-bold text-white">فهرست حساب‌های کاربری</h3>
-                        <p class="text-xs text-slate-400 mt-0.5">کاربران تعریف‌شده در پایگاه داده PostgreSQL</p>
+                        <p class="text-xs text-slate-400 mt-0.5">کاربران تعریف‌شده در پایگاه داده PostgreSQL و توکن‌های احراز هویت</p>
                     </div>
                     <span class="text-xs text-slate-400" x-text="users.length + ' کاربر'"></span>
                 </div>
@@ -161,6 +165,7 @@
                                 <th class="p-4">شناسه</th>
                                 <th class="p-4">نام کاربری</th>
                                 <th class="p-4">نقش</th>
+                                <th class="p-4">توکن اختصاصی API</th>
                                 <th class="p-4">نسخه ثبت</th>
                                 <th class="p-4">وضعیت</th>
                                 <th class="p-4 text-center">عملیات</th>
@@ -182,6 +187,26 @@
                                             :class="user.is_admin ? 'bg-red-500/20 text-red-300 border-red-500/30' : 'bg-zinc-800 text-slate-300 border-zinc-700'"
                                             x-text="user.is_admin ? 'مدیر سیستم' : 'کاربر عادی'"
                                         ></span>
+                                    </td>
+                                    <td class="p-4 font-mono text-[11px]">
+                                        <div class="flex items-center space-x-1.5 space-x-reverse">
+                                            <span class="text-red-400 bg-zinc-900/90 px-2 py-0.5 rounded border border-zinc-800" x-text="user.token ? (user.token.substring(0, 14) + '...') : (user.token_prefix ? user.token_prefix + '...' : 'ندارد')"></span>
+                                            <button 
+                                                x-show="user.token" 
+                                                @click="copyText(user.token)" 
+                                                title="کپی کامل توکن"
+                                                class="p-1 rounded hover:bg-zinc-800 text-slate-400 hover:text-white transition"
+                                            >
+                                                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <button 
+                                                @click="regenerateUserToken(user)" 
+                                                title="تولید مجدد توکن تصادفی"
+                                                class="p-1 rounded hover:bg-zinc-800 text-red-400 hover:text-red-300 transition"
+                                            >
+                                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
                                     </td>
                                     <td class="p-4">
                                         <span class="font-mono text-slate-400 text-[11px]" x-text="'v' + user.created_version"></span>
@@ -229,14 +254,14 @@
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                     <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
-                        <span class="text-slate-400">موتور VLM گما ۴:</span>
-                        <p class="font-mono text-white text-xs mt-1">10.0.38.50:50015</p>
-                        <p class="text-[11px] text-slate-500 mt-0.5">مدل: gemma-4-26B-A4B-it-Q8_0.gguf</p>
+                        <span class="text-slate-400">موتور بینایی Gemma 4:</span>
+                        <p class="font-mono text-red-400 text-xs mt-1" x-text="stats.runtime_config?.gemma4_url || 'در حال بارگذاری...'"></p>
+                        <p class="text-[11px] text-slate-500 mt-0.5" x-text="'مدل: ' + (stats.runtime_config?.gemma4_model || '')"></p>
                     </div>
                     <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
-                        <span class="text-slate-400">موتور VLM اولم:</span>
-                        <p class="font-mono text-white text-xs mt-1">192.168.159.43:1234</p>
-                        <p class="text-[11px] text-slate-500 mt-0.5">مدل: allenai/olmocr-2-7b</p>
+                        <span class="text-slate-400">موتور بینایی OlmOCR:</span>
+                        <p class="font-mono text-red-400 text-xs mt-1" x-text="stats.runtime_config?.olmocr_url || 'در حال بارگذاری...'"></p>
+                        <p class="text-[11px] text-slate-500 mt-0.5" x-text="'مدل: ' + (stats.runtime_config?.olmocr_model || '')"></p>
                     </div>
                     <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
                         <span class="text-slate-400">پایگاه داده:</span>
@@ -273,9 +298,91 @@
 
                     <div class="flex items-center justify-end space-x-3 space-x-reverse pt-4 border-t border-zinc-800">
                         <button type="button" @click="showCreateModal = false" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-slate-300 transition">انصراف</button>
-                        <button type="submit" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-semibold text-white shadow-lg shadow-red-900/30 transition">ایجاد کاربر</button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-semibold text-white shadow-lg shadow-red-900/30 transition">ایجاد کاربر و صدور توکن</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- User Created Success Modal -->
+        <div x-show="showCreatedModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+            <div class="bg-[#141417] border border-emerald-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-4">
+                <div class="flex items-center space-x-2.5 space-x-reverse">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                        <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">کاربر با موفقیت ایجاد شد</h3>
+                        <p class="text-[11px] text-slate-400">مشخصات ورود و توکن اختصاصی کاربر</p>
+                    </div>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">نام کاربری:</span>
+                        <span class="font-bold text-white" x-text="createdUserData?.username"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">نقش:</span>
+                        <span class="text-slate-200" x-text="createdUserData?.is_admin ? 'مدیر سیستم' : 'کاربر عادی'"></span>
+                    </div>
+                    <div class="pt-2 border-t border-zinc-800 space-y-1">
+                        <span class="text-slate-400 block">توکن اختصاصی API:</span>
+                        <div class="flex items-center space-x-2 space-x-reverse bg-black/50 p-2 rounded-lg border border-zinc-800">
+                            <span class="font-mono text-red-400 text-xs flex-1 truncate" x-text="createdUserData?.token"></span>
+                            <button @click="copyText(createdUserData?.token)" class="px-2.5 py-1 rounded bg-red-600 hover:bg-red-500 text-white text-[11px] font-semibold transition">
+                                کپی توکن
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-2">
+                    <button @click="showCreatedModal = false" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-white transition">
+                        بستن
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Self Token Modal -->
+        <div x-show="showAdminTokenModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div @click.away="showAdminTokenModal = false" class="bg-[#141417] border border-red-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-4">
+                <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                    <div class="flex items-center space-x-2.5 space-x-reverse">
+                        <div class="w-9 h-9 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400">
+                            <i data-lucide="key" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white">توکن اختصاصی مدیر (Admin Token)</h3>
+                            <p class="text-[11px] text-slate-400">استفاده در اسکریپت‌ها و فراخوانی مستقیم API</p>
+                        </div>
+                    </div>
+                    <button @click="showAdminTokenModal = false" class="text-slate-400 hover:text-white p-1">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-slate-300">توکن فعال مدیر:</label>
+                    <div class="flex items-center space-x-2 space-x-reverse bg-zinc-900 border border-zinc-700 rounded-xl p-2">
+                        <input type="text" readonly :value="adminToken" class="font-mono text-red-400 bg-transparent flex-1 text-xs outline-none px-2 select-all">
+                        <button @click="copyText(adminToken)" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center space-x-1 space-x-reverse transition">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            <span>کپی</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-3 border-t border-zinc-800">
+                    <button @click="regenerateAdminToken()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs font-semibold shadow-lg shadow-red-950/40 transition flex items-center space-x-1.5 space-x-reverse">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span>تولید مجدد توکن تصادفی</span>
+                    </button>
+                    <button @click="showAdminTokenModal = false" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-medium transition">
+                        بستن
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -309,16 +416,21 @@
             return {
                 users: [],
                 stats: {},
+                adminToken: '',
                 loading: false,
                 showCreateModal: false,
+                showCreatedModal: false,
+                showAdminTokenModal: false,
                 showResetModal: false,
                 selectedUser: null,
+                createdUserData: null,
                 resetPasswordVal: '',
                 newUser: { username: '', password: '', is_admin: false },
 
                 async initAdmin() {
                     await this.checkAuth();
                     await this.refreshData();
+                    await this.loadAdminToken();
                 },
 
                 async checkAuth() {
@@ -332,6 +444,18 @@
                         }
                     } catch (e) {
                         window.location.href = '/login';
+                    }
+                },
+
+                async loadAdminToken() {
+                    try {
+                        const res = await fetch('/api/user/token');
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.adminToken = data.token;
+                        }
+                    } catch (e) {
+                        console.error('Failed to load admin token', e);
                     }
                 },
 
@@ -358,6 +482,11 @@
                     this.$nextTick(() => lucide.createIcons());
                 },
 
+                openAdminTokenModal() {
+                    this.showAdminTokenModal = true;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+
                 async submitCreateUser() {
                     try {
                         const res = await fetch('/api/admin/users', {
@@ -367,12 +496,51 @@
                         });
                         const data = await res.json();
                         if (!res.ok) throw new Error(data.detail || 'خطا در ثبت کاربر');
-                        alert(data.message);
+
                         this.showCreateModal = false;
+                        this.createdUserData = data.user;
+                        this.showCreatedModal = true;
                         await this.refreshData();
                     } catch (err) {
                         alert('خطا: ' + err.message);
                     }
+                },
+
+                async regenerateUserToken(user) {
+                    if (!confirm(`آیا از تولید مجدد توکن برای کاربر '${user.username}' مطمئن هستید؟`)) return;
+                    try {
+                        const res = await fetch(`/api/admin/users/${user.id}/regenerate-token`, {
+                            method: 'POST'
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'خطا');
+                        alert(data.message + '\n\nتوکن جدید: ' + data.token);
+                        await this.refreshData();
+                    } catch (err) {
+                        alert('خطا: ' + err.message);
+                    }
+                },
+
+                async regenerateAdminToken() {
+                    if (!confirm("آیا از تولید مجدد توکن خودتان مطمئن هستید؟ توکن قبلی منقضی خواهد شد.")) return;
+                    try {
+                        const res = await fetch('/api/user/token/regenerate', { method: 'POST' });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'خطا');
+                        this.adminToken = data.token;
+                        alert("توکن تصادفی جدید برای مدیر با موفقیت صادر گردید.");
+                    } catch (err) {
+                        alert('خطا: ' + err.message);
+                    }
+                },
+
+                copyText(text) {
+                    if (!text) return;
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('توکن در حافظه کپی شد: ' + text);
+                    }).catch(() => {
+                        alert('توکن: ' + text);
+                    });
                 },
 
                 openResetPasswordModal(user) {

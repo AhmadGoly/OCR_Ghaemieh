@@ -59,27 +59,49 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۰.۰</span>
+                        <span class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۱.۰</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
             </div>
 
             <div class="flex items-center space-x-3 space-x-reverse" id="nav-user-actions">
-                <a href="/admin" class="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 hover:text-white text-xs font-semibold transition flex items-center space-x-1.5 space-x-reverse">
-                    <i data-lucide="shield" class="w-4 h-4 text-red-400"></i>
-                    <span>پنل مدیریت</span>
-                </a>
                 <a href="/login" class="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-900/20 transition flex items-center space-x-1.5 space-x-reverse">
                     <i data-lucide="user" class="w-4 h-4"></i>
-                    <span>ورود / حساب</span>
+                    <span>ورود به سیستم</span>
                 </a>
             </div>
         </div>
     </header>
 
     <!-- Main Workspace -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 relative z-10">
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 relative z-10">
+
+        <!-- Active User & Token Status Banner -->
+        <div id="user-token-banner" class="bg-gradient-to-r from-red-950/40 via-[#141418] to-red-950/40 border border-red-500/20 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs shadow-lg">
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <div class="w-9 h-9 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400 shadow-inner">
+                    <i data-lucide="key" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <span class="text-slate-300 font-semibold">توکن اختصاصی شما:</span>
+                        <code id="banner-token-display" class="font-mono text-red-400 font-bold bg-zinc-900/90 px-2.5 py-0.5 rounded-lg border border-zinc-700/80">در حال دریافت...</code>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-0.5">تمامی درخواست‌های استخراج متن از طریق این توکن معتبرسازی می‌شوند.</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2 space-x-reverse">
+                <button type="button" id="banner-copy-token-btn" class="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-xs font-medium transition flex items-center space-x-1.5 space-x-reverse">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    <span id="banner-copy-text">کپی توکن</span>
+                </button>
+                <button type="button" id="open-token-modal-btn" class="px-3.5 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-xs font-medium transition flex items-center space-x-1.5 space-x-reverse">
+                    <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+                    <span>مدیریت و تولید مجدد</span>
+                </button>
+            </div>
+        </div>
 
         <!-- Upload Dropzone Card -->
         <div class="bg-[#121215]/80 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 shadow-xl relative overflow-hidden">
@@ -305,8 +327,62 @@
 
     <!-- Footer -->
     <footer class="border-t border-zinc-800/80 bg-[#121215]/40 py-6 mt-12 text-center text-xs text-slate-500">
-        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۰.۰ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
+        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۱.۰ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
     </footer>
+
+    <!-- Token Management Modal -->
+    <div id="token-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div class="bg-[#141417] border border-red-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-5">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div class="flex items-center space-x-2.5 space-x-reverse">
+                    <div class="w-9 h-9 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400">
+                        <i data-lucide="key-round" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">مدیریت کلید API و توکن اختصاصی</h3>
+                        <p class="text-[11px] text-slate-400">احراز هویت و ارسال درخواست به سامانه OCR</p>
+                    </div>
+                </div>
+                <button type="button" id="close-token-modal-btn" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-xs font-semibold text-slate-300">کلید API فعال شما (Secret Key):</label>
+                <div class="flex items-center space-x-2 space-x-reverse bg-zinc-900 border border-zinc-700 rounded-xl p-2">
+                    <input type="text" id="modal-token-input" readonly class="font-mono text-red-400 bg-transparent flex-1 text-xs outline-none px-2 select-all" />
+                    <button type="button" id="modal-copy-token-btn" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center space-x-1 space-x-reverse transition shrink-0">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span id="copy-btn-text">کپی توکن</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-300">نمونه فراخوانی با cURL:</span>
+                    <button type="button" id="copy-curl-btn" class="text-[11px] text-red-400 hover:underline">کپی دستور</button>
+                </div>
+                <pre id="curl-code-block" class="font-mono text-[11px] text-slate-300 overflow-x-auto p-2 bg-black/60 rounded-lg text-left" dir="ltr"></pre>
+            </div>
+
+            <div class="p-3 rounded-xl bg-red-950/30 border border-red-500/20 flex items-start space-x-2 space-x-reverse text-xs text-red-300">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-red-400 shrink-0 mt-0.5"></i>
+                <p class="text-[11px]">با کلیک بر روی دکمه «تولید مجدد توکن تصادفی»، توکن فعلی شما فوراً غیرفعال شده و توکن جدیدی صادر خواهد شد.</p>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-zinc-800">
+                <button type="button" id="modal-regenerate-token-btn" class="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white text-xs font-semibold shadow-lg shadow-red-950/40 transition flex items-center space-x-1.5 space-x-reverse">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    <span>تولید مجدد توکن تصادفی</span>
+                </button>
+                <button type="button" id="modal-cancel-btn" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-medium transition">
+                    بستن
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>

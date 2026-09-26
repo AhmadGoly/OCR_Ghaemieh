@@ -12,7 +12,7 @@ ADMIN_PASSWORD = getattr(config, "ADMIN_PASSWORD", "admin123")
 
 
 async def init_database() -> None:
-    """Creates database tables and provisions initial admin user if not present."""
+    """Creates database tables and provisions initial admin user and token if not present."""
     logger.info("Initializing database schema...")
     try:
         async with engine.begin() as conn:
@@ -39,7 +39,6 @@ async def init_database() -> None:
                 session.add(admin_user)
                 await session.flush()
 
-                # Optional initial key for admin
                 raw_key, key_prefix, key_hash = generate_raw_api_key()
                 default_key = ApiKey(
                     user_id=admin_user.id,
@@ -59,7 +58,24 @@ async def init_database() -> None:
                 print(f"   API Key:  {raw_key}", flush=True)
                 print("-" * 68, flush=True)
             else:
-                logger.info(f"Admin user '{ADMIN_USERNAME}' is already provisioned.")
+                # Ensure existing admin has an active ApiKey
+                key_stmt = select(ApiKey).where(ApiKey.user_id == existing_admin.id, ApiKey.is_active == True)
+                key_result = await session.execute(key_stmt)
+                admin_key = key_result.scalar_one_or_none()
+                if not admin_key:
+                    raw_key, key_prefix, key_hash = generate_raw_api_key()
+                    default_key = ApiKey(
+                        user_id=existing_admin.id,
+                        name="Default Admin Master Key",
+                        key_prefix=key_prefix,
+                        secret_key=raw_key,
+                        key_hash=key_hash,
+                        is_active=True
+                    )
+                    session.add(default_key)
+                    await session.commit()
+                    print(f" [DB Provisioning] Active API Key assigned to existing Admin: {raw_key}", flush=True)
+                logger.info(f"Admin user '{ADMIN_USERNAME}' verified with active API key.")
         except Exception as e:
             logger.error(f"Database seeding error: {e}")
             await session.rollback()

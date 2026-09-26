@@ -8,8 +8,8 @@ from typing import List, Optional
 from contextlib import asynccontextmanager
 from enum import Enum
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from PIL import Image
 
@@ -32,7 +32,9 @@ from db.session import get_db
 from db.models import User, ExtractionHistory
 from api.auth import router as auth_router
 from api.admin import router as admin_router
-from core.deps import get_current_user_optional
+from api.user import router as user_router
+from core.deps import get_current_user, get_current_user_optional
+from core.security import decode_access_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # --- Enums for API Documentation ---
@@ -142,9 +144,13 @@ app = FastAPI(
 
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(user_router)
 
 @app.get("/", include_in_schema=False)
-async def read_index():
+async def read_index(request: Request):
+    token = request.cookies.get("access_token")
+    if not token or not decode_access_token(token):
+        return RedirectResponse(url="/login")
     return FileResponse(os.path.join(BASE_DIR, 'index.html'))
 
 @app.get("/login", include_in_schema=False)
@@ -152,7 +158,13 @@ async def read_login():
     return FileResponse(os.path.join(BASE_DIR, 'login.html'))
 
 @app.get("/admin", include_in_schema=False)
-async def read_admin():
+async def read_admin(request: Request):
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/login")
+    payload = decode_access_token(token)
+    if not payload or not payload.get("is_admin"):
+        return RedirectResponse(url="/login")
     return FileResponse(os.path.join(BASE_DIR, 'admin.html'))
 
 @app.get("/style.css", include_in_schema=False)
@@ -174,7 +186,7 @@ async def ocr_image(
     scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0),
     crop_whitespaces: bool = Form(False),
     use_llm: bool = Form(config.DEFAULT_USE_LLM),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if model.value not in ocr_service.models:
@@ -200,7 +212,7 @@ async def ocr_image(
         # Record in database history
         try:
             hist = ExtractionHistory(
-                user_id=current_user.id if current_user else None,
+                user_id=current_user.id,
                 filename=file.filename or "image.jpg",
                 file_type="image",
                 pages_count=1,
@@ -232,7 +244,7 @@ async def ocr_pdf(
     scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0),
     crop_whitespaces: bool = Form(False),
     use_llm: bool = Form(config.DEFAULT_USE_LLM),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if model.value not in ocr_service.models:
@@ -262,7 +274,7 @@ async def ocr_pdf(
             total_ocr = sum(p.get("ocr_duration", 0.0) for p in results) if results else 0.0
             total_llm = sum(p.get("llm_duration", 0.0) for p in results if p.get("llm_duration", -1) > 0)
             hist = ExtractionHistory(
-                user_id=current_user.id if current_user else None,
+                user_id=current_user.id,
                 filename=file.filename or "document.pdf",
                 file_type="pdf",
                 pages_count=len(results),

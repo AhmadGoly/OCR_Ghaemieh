@@ -2,10 +2,11 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, desc
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.session import get_db
-from db.models import User, ExtractionHistory
-from core.security import hash_password
+from db.models import User, ApiKey, ExtractionHistory
+from core.security import hash_password, generate_raw_api_key
 from core.deps import require_admin
 import config
 
@@ -24,27 +25,31 @@ class ResetPasswordRequest(BaseModel):
 
 @router.get("/users")
 async def list_users(db: AsyncSession = Depends(get_db)):
-    """List all registered user accounts with metadata."""
-    stmt = select(User).order_by(desc(User.created_at))
+    """List all registered user accounts with metadata and active API token."""
+    stmt = select(User).options(selectinload(User.api_keys)).order_by(desc(User.created_at))
     result = await db.execute(stmt)
     users = result.scalars().all()
 
-    return [
-        {
+    user_list = []
+    for u in users:
+        active_key = next((k for k in u.api_keys if k.is_active), None)
+        user_list.append({
             "id": u.id,
             "username": u.username,
             "is_admin": u.is_admin,
             "is_active": u.is_active,
             "created_version": u.created_version or "unknown",
-            "created_at": u.created_at.isoformat() if u.created_at else None
-        }
-        for u in users
-    ]
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "token": active_key.secret_key if active_key else None,
+            "token_prefix": active_key.key_prefix if active_key else None
+        })
+
+    return user_list
 
 
 @router.post("/users")
 async def create_user(req: CreateUserRequest, db: AsyncSession = Depends(get_db)):
-    """Creates a new user account with active application version recording."""
+    """Creates a new user account with active application version recording and provisions an API token."""
     # Check if username exists
     stmt = select(User).where(User.username == req.username)
     result = await db.execute(stmt)
@@ -62,17 +67,30 @@ async def create_user(req: CreateUserRequest, db: AsyncSession = Depends(get_db)
         created_version=config.VERSION
     )
     db.add(new_user)
+    await db.flush()
+
+    raw_key, key_prefix, key_hash = generate_raw_api_key()
+    api_key = ApiKey(
+        user_id=new_user.id,
+        name=f"Key for {new_user.username}",
+        key_prefix=key_prefix,
+        secret_key=raw_key,
+        key_hash=key_hash,
+        is_active=True
+    )
+    db.add(api_key)
     await db.commit()
     await db.refresh(new_user)
 
     return {
         "status": "success",
-        "message": f"کاربر '{new_user.username}' با موفقیت ساخته شد.",
+        "message": f"کاربر '{new_user.username}' با موفقیت ساخته شد و توکن اختصاصی صادر گردید.",
         "user": {
             "id": new_user.id,
             "username": new_user.username,
             "is_admin": new_user.is_admin,
-            "created_version": new_user.created_version
+            "created_version": new_user.created_version,
+            "token": raw_key
         }
     }
 
@@ -108,6 +126,40 @@ async def reset_password(user_id: int, req: ResetPasswordRequest, db: AsyncSessi
     await db.commit()
 
     return {"status": "success", "message": f"رمز عبور کاربر '{user.username}' با موفقیت تغییر یافت."}
+
+
+@router.post("/users/{user_id}/regenerate-token")
+async def admin_regenerate_user_token(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Allows admin to re-issue an API key for any user."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="کاربر یافت نشد.")
+
+    # Deactivate existing active keys
+    stmt = select(ApiKey).where(ApiKey.user_id == user_id, ApiKey.is_active == True)
+    result = await db.execute(stmt)
+    for k in result.scalars().all():
+        k.is_active = False
+
+    raw_key, key_prefix, key_hash = generate_raw_api_key()
+    new_key = ApiKey(
+        user_id=user.id,
+        name=f"Key for {user.username}",
+        key_prefix=key_prefix,
+        secret_key=raw_key,
+        key_hash=key_hash,
+        is_active=True
+    )
+    db.add(new_key)
+    await db.commit()
+    await db.refresh(new_key)
+
+    return {
+        "status": "success",
+        "message": f"توکن جدید برای کاربر '{user.username}' با موفقیت ایجاد شد.",
+        "token": new_key.secret_key,
+        "token_prefix": new_key.key_prefix
+    }
 
 
 @router.delete("/users/{user_id}")
