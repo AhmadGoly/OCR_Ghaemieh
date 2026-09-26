@@ -1,6 +1,6 @@
 import os
 
-VERSION = "2.0.2"
+VERSION = "2.1.0"
 
 try:
     from dotenv import load_dotenv
@@ -48,3 +48,82 @@ DEFAULT_LLM_API_KEY = os.environ.get("DEFAULT_LLM_API_KEY", "your_dummy_or_real_
 
 # Whitespace cropping threshold
 CROP_WHITESPACE_THRESHOLD = int(os.environ.get("CROP_WHITESPACE_THRESHOLD", 250))
+
+
+def mask_secret(value: str) -> str:
+    """Mask secret API keys for safe display in logs and public endpoints."""
+    if not value or value in ("no-key", "your_dummy_or_real_key", "none"):
+        return value or "none"
+    if len(value) <= 8:
+        return "****"
+    return f"{value[:3]}...{value[-3:]}"
+
+
+def get_config_dict() -> dict:
+    """Returns runtime configuration dictionary with masked secrets."""
+    return {
+        "version": VERSION,
+        "server": {
+            "port": FASTAPI_PORT,
+        },
+        "models_enabled": {
+            "tesseract": LOAD_TESSERACT,
+            "olmocr_2b": LOAD_OLMOCR_2B,
+            "docling": LOAD_DOCLING,
+            "qwen": LOAD_QWEN,
+            "varco": LOAD_VARCO,
+        },
+        "olmocr": {
+            "endpoint": OLMOCR_LLM_URL_V1,
+            "model_name": OLMOCR_MODEL_NAME,
+            "api_key": mask_secret(OLMOCR_API_KEY),
+        },
+        "llm_merger": {
+            "default_use_llm": DEFAULT_USE_LLM,
+            "endpoint": DEFAULT_LLM_URL,
+            "model_name": DEFAULT_LLM_MODEL_NAME,
+            "api_key": mask_secret(DEFAULT_LLM_API_KEY),
+        },
+        "defaults": {
+            "model": DEFAULT_MODEL,
+            "lang": DEFAULT_LANG,
+            "preprocess": DEFAULT_PREPROCESS,
+            "contrast": DEFAULT_CONTRAST,
+            "scale": DEFAULT_SCALE,
+            "crop_whitespace_threshold": CROP_WHITESPACE_THRESHOLD,
+            "tessdata_prefix": os.environ.get("TESSDATA_PREFIX", "/usr/share/tesseract-ocr/4.00/tessdata/"),
+        },
+    }
+
+
+def print_startup_banner() -> None:
+    """Prints a structured banner of all environment & runtime configurations at service startup."""
+    cfg = get_config_dict()
+    print("=" * 68)
+    print(f"             GHAEMIEH OCR SERVICE v{cfg['version']}")
+    print("=" * 68)
+    print(f" [Server]              Port: {cfg['server']['port']}")
+    print(f" [Models Enabled]")
+    print(f"   - Tesseract:        {'ENABLED' if cfg['models_enabled']['tesseract'] else 'DISABLED'}")
+    print(f"   - OlmOCR 2B:        {'ENABLED' if cfg['models_enabled']['olmocr_2b'] else 'DISABLED'}")
+    print(f"   - Docling:          {'ENABLED' if cfg['models_enabled']['docling'] else 'DISABLED'}")
+    print(f"   - Qwen VL:          {'ENABLED' if cfg['models_enabled']['qwen'] else 'DISABLED'}")
+    print(f"   - Varco:            {'ENABLED' if cfg['models_enabled']['varco'] else 'DISABLED'}")
+    print(f" [OlmOCR Engine]")
+    print(f"   - Endpoint:         {cfg['olmocr']['endpoint']}")
+    print(f"   - Model:            {cfg['olmocr']['model_name']}")
+    print(f"   - API Key:          {cfg['olmocr']['api_key']}")
+    print(f" [LLM Merger Engine]")
+    print(f"   - Active by default:{'YES' if cfg['llm_merger']['default_use_llm'] else 'NO'}")
+    print(f"   - Endpoint:         {cfg['llm_merger']['endpoint']}")
+    print(f"   - Model:            {cfg['llm_merger']['model_name']}")
+    print(f"   - API Key:          {cfg['llm_merger']['api_key']}")
+    print(f" [Inference Defaults]")
+    print(f"   - Primary Model:    {cfg['defaults']['model']}")
+    print(f"   - Default Lang:     {cfg['defaults']['lang']}")
+    print(f"   - Preprocess:       {cfg['defaults']['preprocess']}")
+    print(f"   - Contrast:         {cfg['defaults']['contrast']}")
+    print(f"   - Rescale Factor:   {cfg['defaults']['scale']}")
+    print(f"   - Whitespace Crop:  Threshold {cfg['defaults']['crop_whitespace_threshold']}")
+    print(f"   - Tessdata Prefix:  {cfg['defaults']['tessdata_prefix']}")
+    print("=" * 68)

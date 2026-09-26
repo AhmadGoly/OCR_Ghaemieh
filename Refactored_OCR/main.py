@@ -55,6 +55,7 @@ ocr_service = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global ocr_service
+    config.print_startup_banner()
     print("Initializing application and loading models...")
     loaded_models = {}
 
@@ -205,6 +206,11 @@ async def ocr_pdf(
 @app.get("/health/models")
 def health_models():
     return {model: "loaded" for model in ocr_service.models}
+
+@app.get("/health/config")
+def health_config():
+    """Returns the loaded runtime and environment configuration (with secrets masked)."""
+    return config.get_config_dict()
 
 if __name__ == "__main__":
     import uvicorn
