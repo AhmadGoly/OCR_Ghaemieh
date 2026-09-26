@@ -12,10 +12,11 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ocr_admin} -d ${POSTGRES_DB:-ghaemieh_ocr_db}"]
+      test: ["CMD-SHELL", "pg_isready -h localhost"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   ocr:
     build: .
