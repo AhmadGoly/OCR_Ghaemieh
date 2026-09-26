@@ -8,18 +8,9 @@ services:
     command: python main.py
     ports:
       - "3334:4567"
+    env_file:
+      - .env
     environment:
       FASTAPI_PORT: 4567
-      LOAD_TESSERACT: "True"
-      LOAD_DOCLING: "False"
-      LOAD_QWEN: "False"
-      LOAD_VARCO: "False"
-      LOAD_OLMOCR_2B: "True"
-      OLMOCR_LLM_URL_V1: "http://172.16.20.16:12346/v1"
-      DEFAULT_LLM_URL: "http://172.16.20.16:12347/v1"
-      DEFAULT_LLM_MODEL_NAME: "gemma-3-27b-it-Q8_0.gguf"
-      DEFAULT_LLM_API_KEY: "your_dummy_or_real_key"
-      DEFAULT_USE_LLM: "False"
-      TESSDATA_PREFIX: "/usr/share/tesseract-ocr/4.00/tessdata/"
     volumes:
       - ./:/app

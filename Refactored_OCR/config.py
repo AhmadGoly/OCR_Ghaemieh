@@ -1,6 +1,15 @@
 import os
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    parent_env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.exists(parent_env):
+        load_dotenv(parent_env)
+except ImportError:
+    pass
 
 def get_bool_env(var_name: str, default: bool) -> bool:
     val = os.environ.get(var_name)

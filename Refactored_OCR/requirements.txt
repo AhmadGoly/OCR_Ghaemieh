@@ -18,3 +18,4 @@ docling
 imutils
 accelerate
 torchvision
+python-dotenv
