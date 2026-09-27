@@ -78,8 +78,11 @@ async def logout(response: Response):
 
 
 @router.get("/me", include_in_schema=False)
-async def get_me(current_user: User = Depends(get_current_user)):
+async def get_me(response: Response, current_user: User = Depends(get_current_user)):
     """Returns the authenticated user profile."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return {
         "id": current_user.id,
         "username": current_user.username,

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.session import get_db
@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/user", tags=["User Token & API Key"])
 
 @router.get("/token", summary="Get Active API Token")
 async def get_my_token(
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -21,6 +22,9 @@ async def get_my_token(
     - Header `X-API-Key: sk-gh-...`
     - Header `Authorization: Bearer sk-gh-...`
     """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     stmt = (
         select(ApiKey)
         .where(ApiKey.user_id == current_user.id, ApiKey.is_active == True)

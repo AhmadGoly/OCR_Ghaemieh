@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, desc
 from sqlalchemy.orm import selectinload
@@ -24,8 +24,11 @@ class ResetPasswordRequest(BaseModel):
 
 
 @router.get("/users")
-async def list_users(db: AsyncSession = Depends(get_db)):
+async def list_users(response: Response, db: AsyncSession = Depends(get_db)):
     """List all registered user accounts with metadata and active API token."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     stmt = select(User).options(selectinload(User.api_keys)).order_by(desc(User.created_at))
     result = await db.execute(stmt)
     users = result.scalars().all()
