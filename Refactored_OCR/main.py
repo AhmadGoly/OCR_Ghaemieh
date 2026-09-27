@@ -51,13 +51,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 class ModelName(str, Enum):
     gemma4 = "gemma4"
-    gemma = "gemma"
     olmocr_2b = "olmocr_2b"
-    olmocr = "olmocr"
     tesseract = "tesseract"
     docling = "docling"
     qwen = "qwen"
     varco = "varco"
+
+def resolve_model_name(name: Optional[Union[str, ModelName]]) -> Optional[str]:
+    """Normalize model identifiers and aliases to canonical model names."""
+    if not name:
+        return None
+    val = name.value if isinstance(name, Enum) else str(name)
+    val = val.lower().strip()
+    if val in ("olmocr", "olmocr_7b"):
+        return "olmocr_2b"
+    if val in ("gemma", "gemma_4"):
+        return "gemma4"
+    return val
 
 # --- Pydantic Models for API Documentation ---
 
@@ -142,7 +152,6 @@ async def lifespan(app: FastAPI):
             default_langs=config.DEFAULT_LANG.split('+'),
             model_name=config.OLMOCR_MODEL_NAME
         )
-        loaded_models['olmocr'] = loaded_models['olmocr_2b']
         print("OlmOCR model loaded.")
 
     if config.LOAD_GEMMA4:
@@ -153,7 +162,6 @@ async def lifespan(app: FastAPI):
             default_langs=config.DEFAULT_LANG.split('+'),
             model_name=config.GEMMA4_MODEL_NAME
         )
-        loaded_models['gemma'] = loaded_models['gemma4']
         print("Gemma 4 VLM model loaded.")
 
     merger = LLMMerger(
@@ -348,8 +356,13 @@ async def ocr_image(
     - Executed on a dedicated thread pool to ensure non-blocking concurrent request handling.
     - Requires authentication via `X-API-Key` or `Authorization: Bearer <token>`.
     """
-    if model.value not in ocr_service.models:
-        raise HTTPException(status_code=400, detail=f"Model '{model.value}' is not active on this server.")
+    primary_model_name = resolve_model_name(model)
+    if not primary_model_name or primary_model_name not in ocr_service.models:
+        raise HTTPException(status_code=400, detail=f"Model '{model.value if isinstance(model, Enum) else model}' is not active on this server.")
+
+    secondary_model_name = resolve_model_name(secondary_model) if secondary_model else None
+    if secondary_model_name and secondary_model_name not in ocr_service.models:
+        raise HTTPException(status_code=400, detail=f"Secondary model '{secondary_model.value if isinstance(secondary_model, Enum) else secondary_model}' is not active on this server.")
 
     image_data = await file.read()
     image = Image.open(io.BytesIO(image_data))
@@ -362,8 +375,8 @@ async def ocr_image(
                 ocr_executor,
                 lambda: ocr_service.process_image(
                     image,
-                    primary_model_name=model.value,
-                    secondary_model_name=secondary_model.value if secondary_model else None,
+                    primary_model_name=primary_model_name,
+                    secondary_model_name=secondary_model_name,
                     lang=lang,
                     preprocess=preprocess,
                     contrast=contrast,
@@ -422,8 +435,13 @@ async def ocr_pdf(
     - Converts and extracts PDF pages concurrently across thread pool workers to minimize latency.
     - Requires authentication via `X-API-Key` or `Authorization: Bearer <token>`.
     """
-    if model.value not in ocr_service.models:
-        raise HTTPException(status_code=400, detail=f"Model '{model.value}' is not active on this server.")
+    primary_model_name = resolve_model_name(model)
+    if not primary_model_name or primary_model_name not in ocr_service.models:
+        raise HTTPException(status_code=400, detail=f"Model '{model.value if isinstance(model, Enum) else model}' is not active on this server.")
+
+    secondary_model_name = resolve_model_name(secondary_model) if secondary_model else None
+    if secondary_model_name and secondary_model_name not in ocr_service.models:
+        raise HTTPException(status_code=400, detail=f"Secondary model '{secondary_model.value if isinstance(secondary_model, Enum) else secondary_model}' is not active on this server.")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(await file.read())
@@ -436,8 +454,8 @@ async def ocr_pdf(
                 ocr_executor,
                 lambda: ocr_service.process_pdf(
                     pdf_path=pdf_path,
-                    primary_model_name=model.value,
-                    secondary_model_name=secondary_model.value if secondary_model else None,
+                    primary_model_name=primary_model_name,
+                    secondary_model_name=secondary_model_name,
                     lang=lang,
                     start_page=start_page,
                     end_page=end_page,
@@ -637,7 +655,23 @@ def health_models(response: Response):
 
     if not ocr_service or not ocr_service.models:
         return {}
-    return {model: "loaded" for model in ocr_service.models}
+
+    # Deduplicate aliases and return canonical model keys only
+    canonical_order = ["gemma4", "olmocr_2b", "tesseract", "docling", "qwen", "varco"]
+    result = {}
+    seen_instances = set()
+    for name in canonical_order:
+        if name in ocr_service.models:
+            inst = ocr_service.models[name]
+            result[name] = "loaded"
+            seen_instances.add(id(inst))
+
+    for name, inst in ocr_service.models.items():
+        if id(inst) not in seen_instances and name not in result:
+            result[name] = "loaded"
+            seen_instances.add(id(inst))
+
+    return result
 
 @app.get("/health/config", include_in_schema=False)
 def health_config(response: Response):

@@ -60,7 +60,7 @@
                     <div>
                         <div class="flex items-center space-x-2 space-x-reverse">
                             <span class="text-sm font-black text-white">سامانه OCR قائمیه</span>
-                            <span class="text-[10px] uppercase font-bold tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full" x-text="'نسخه ' + (stats.version || '3.1.0')"></span>
+                            <span class="text-[10px] uppercase font-bold tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full" x-text="'نسخه ' + (stats.version || '3.4.0')">نسخه 3.4.0</span>
                         </div>
                         <p class="text-[11px] text-slate-400">پنل مدیریت کاربران و پایش سرویس‌ها</p>
                     </div>
@@ -129,8 +129,8 @@
                 <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
                     <p class="text-xs font-semibold text-slate-400">مدل بینایی Gemma 4</p>
                     <div class="flex items-center space-x-2 space-x-reverse mt-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50"></span>
-                        <span class="text-sm font-bold text-white">فعال و آماده</span>
+                        <span class="w-2.5 h-2.5 rounded-full shadow-md" :class="stats.runtime_config?.models_enabled?.gemma4 !== false ? 'bg-emerald-500 shadow-emerald-500/50' : 'bg-zinc-600 shadow-zinc-600/50'"></span>
+                        <span class="text-sm font-bold text-white" x-text="stats.runtime_config?.models_enabled?.gemma4 !== false ? 'فعال و آماده' : 'غیرفعال'">فعال و آماده</span>
                     </div>
                     <div class="absolute top-5 left-5 w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
                         <i data-lucide="eye" class="w-5 h-5"></i>
@@ -141,8 +141,8 @@
                 <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-5 shadow-lg relative overflow-hidden">
                     <p class="text-xs font-semibold text-slate-400">مدل بینایی OlmOCR 2B</p>
                     <div class="flex items-center space-x-2 space-x-reverse mt-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50"></span>
-                        <span class="text-sm font-bold text-white">فعال و آماده</span>
+                        <span class="w-2.5 h-2.5 rounded-full shadow-md" :class="stats.runtime_config?.models_enabled?.olmocr_2b !== false ? 'bg-emerald-500 shadow-emerald-500/50' : 'bg-zinc-600 shadow-zinc-600/50'"></span>
+                        <span class="text-sm font-bold text-white" x-text="stats.runtime_config?.models_enabled?.olmocr_2b !== false ? 'فعال و آماده' : 'غیرفعال'">فعال و آماده</span>
                     </div>
                     <div class="absolute top-5 left-5 w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
                         <i data-lucide="cpu" class="w-5 h-5"></i>
@@ -257,13 +257,13 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                     <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
                         <span class="text-slate-400">موتور بینایی Gemma 4:</span>
-                        <p class="font-mono text-red-400 text-xs mt-1" x-text="stats.runtime_config?.gemma4_url || 'در حال بارگذاری...'"></p>
-                        <p class="text-[11px] text-slate-500 mt-0.5" x-text="'مدل: ' + (stats.runtime_config?.gemma4_model || '')"></p>
+                        <p class="font-mono text-red-400 text-xs mt-1" x-text="stats.runtime_config?.gemma4_vlm?.endpoint || stats.runtime_config?.gemma4_url || 'در حال بارگذاری...'"></p>
+                        <p class="text-[11px] text-slate-500 mt-0.5" x-text="'مدل: ' + (stats.runtime_config?.gemma4_vlm?.model_name || stats.runtime_config?.gemma4_model || '')"></p>
                     </div>
                     <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
                         <span class="text-slate-400">موتور بینایی OlmOCR:</span>
-                        <p class="font-mono text-red-400 text-xs mt-1" x-text="stats.runtime_config?.olmocr_url || 'در حال بارگذاری...'"></p>
-                        <p class="text-[11px] text-slate-500 mt-0.5" x-text="'مدل: ' + (stats.runtime_config?.olmocr_model || '')"></p>
+                        <p class="font-mono text-red-400 text-xs mt-1" x-text="stats.runtime_config?.olmocr?.endpoint || stats.runtime_config?.olmocr_url || 'در حال بارگذاری...'"></p>
+                        <p class="text-[11px] text-slate-500 mt-0.5" x-text="'مدل: ' + (stats.runtime_config?.olmocr?.model_name || stats.runtime_config?.olmocr_model || '')"></p>
                     </div>
                     <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800">
                         <span class="text-slate-400">پایگاه داده:</span>

@@ -6,10 +6,11 @@ Instructions and operating guidelines for Antigravity AI coding agents working o
 
 ## 1. Core Mandates & Rules
 
-1. **Version Tracking (`config.py`)**:
+1. **Version Tracking (`config.py` & Admin Panel / UI)**:
    - The project version starts at `2.0.0` (matching the current refactored OCR architecture).
    - The version must be maintained in [`Refactored_OCR/config.py`](file:///mnt/d/OCR/Refactored_OCR/config.py) as `VERSION = "x.y.z"`.
    - **Requirement**: Increment / update the version in [`Refactored_OCR/config.py`](file:///mnt/d/OCR/Refactored_OCR/config.py) with **every update or modification** made to the codebase.
+   - **Admin Panel & UI Version Synchronization**: Whenever bumping `VERSION`, agents **MUST ALSO update the displayed version string and fallbacks** in the admin portal ([`Refactored_OCR/admin.html`](file:///mnt/d/OCR/Refactored_OCR/admin.html)) and UI templates ([`Refactored_OCR/index.html`](file:///mnt/d/OCR/Refactored_OCR/index.html), [`Refactored_OCR/login.html`](file:///mnt/d/OCR/Refactored_OCR/login.html)) so that the admin panel and public pages always reflect the exact current version.
    - Follow semantic versioning (`PATCH` for bug fixes/minor adjustments, `MINOR` for new features/endpoints, `MAJOR` for breaking architectural overhauls).
 
 2. **Documentation & UI Integrity**:
@@ -72,6 +73,6 @@ Instructions and operating guidelines for Antigravity AI coding agents working o
 When executing tasks:
 1. **Analyze Context**: Inspect existing files and structure before adding new code.
 2. **Implement Changes**: Ensure modular, testable, and clean code.
-3. **Bump Version**: Update `VERSION` in [`Refactored_OCR/config.py`](file:///mnt/d/OCR/Refactored_OCR/config.py) as part of the changeset.
+3. **Bump Version**: Update `VERSION` in [`Refactored_OCR/config.py`](file:///mnt/d/OCR/Refactored_OCR/config.py) as part of the changeset, and synchronize the version in the admin panel ([`Refactored_OCR/admin.html`](file:///mnt/d/OCR/Refactored_OCR/admin.html)) and user interface pages (`index.html`, `login.html`).
 4. **Verify**: Run syntax checks, unit tests, or linting commands when applicable (`python3 -m py_compile ...`).
 5. **Report & Commit Message**: Summarize changes concisely with clickable links to modified files, and provide the commit message in the format `V<x.y.z> - <type>: <description>`.

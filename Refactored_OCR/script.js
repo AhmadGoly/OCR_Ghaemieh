@@ -49,6 +49,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const curlCodeBlock = document.getElementById("curl-code-block");
   const copyCurlBtn = document.getElementById("copy-curl-btn");
 
+  // Error Modal Elements
+  const errorModal = document.getElementById("error-modal");
+  const errorModalMessage = document.getElementById("error-modal-message");
+  const errorModalCode = document.getElementById("error-modal-code");
+  const errorModalDetails = document.getElementById("error-modal-details");
+  const closeErrorModalBtn = document.getElementById("close-error-modal-btn");
+  const errorModalCloseBtn = document.getElementById("error-modal-close-btn");
+  const copyErrorCodeBtn = document.getElementById("copy-error-code-btn");
+  const copyErrorBtnText = document.getElementById("copy-error-btn-text");
+  const toggleErrorDetailsBtn = document.getElementById("toggle-error-details-btn");
+  const errorDetailsChevron = document.getElementById("error-details-chevron");
+  const appVersionBadge = document.getElementById("app-version-badge");
+
   let selectedFile = null;
   let currentUserToken = null;
   let currentUser = null;
@@ -60,6 +73,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Check login state and retrieve user token
   checkUserSession();
+
+  // Synchronize model availability and disable inactive models
+  syncModelAvailability();
 
   async function checkUserSession() {
     try {
@@ -250,7 +266,11 @@ document.addEventListener("DOMContentLoaded", () => {
         updateTokenDisplay();
         alert("توکن تصادفی جدید با موفقیت صادر شد و برای حسابتان ثبت گردید.");
       } catch (err) {
-        alert("خطا: " + err.message);
+        showErrorModal({
+          status: 400,
+          rawDetail: err.message,
+          customMessage: "متأسفانه ایجاد توکن تصادفی جدید با خطا مواجه شد. لطفاً به مدیر سایت اطلاع دهید."
+        });
       } finally {
         modalRegenerateTokenBtn.disabled = false;
         modalRegenerateTokenBtn.innerHTML = `
@@ -395,20 +415,41 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       if (response.status === 401) {
-        alert("نشست یا توکن کاربری شما منقضی شده است. لطفاً مجدداً وارد سیستم شوید.");
-        window.location.href = "/login";
+        showErrorModal({
+          status: 401,
+          rawDetail: "Unauthorized: Session or token expired.",
+          errorCode: "ERR-401"
+        });
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 3000);
         return;
       }
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "خطا در پردازش فایل");
+        let errorDetail = "خطا در پردازش فایل";
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorDetail;
+        } catch (_) {
+          try {
+            errorDetail = await response.text();
+          } catch (__) {}
+        }
+        showErrorModal({
+          status: response.status,
+          rawDetail: errorDetail
+        });
+        return;
       }
 
       const result = await response.json();
       displayResults(result, !endpoint.includes("pdf"));
     } catch (error) {
-      alert("خطا: " + error.message);
+      showErrorModal({
+        status: 0,
+        rawDetail: error.message || String(error)
+      });
     } finally {
       loadingIndicator.hidden = true;
       submitButton.disabled = false;
@@ -489,4 +530,178 @@ document.addEventListener("DOMContentLoaded", () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   });
+
+  // Synchronize model availability and disable inactive models in select menus
+  async function syncModelAvailability() {
+    try {
+      const res = await fetch("/health/config");
+      if (!res.ok) return;
+      const configData = await res.json();
+
+      if (configData.version && appVersionBadge) {
+        appVersionBadge.textContent = "نسخه " + configData.version;
+      }
+
+      const modelsEnabled = configData.models_enabled || {};
+      applyModelAvailability(modelSelect, modelsEnabled, false);
+      applyModelAvailability(secondaryModelSelect, modelsEnabled, true);
+    } catch (err) {
+      console.warn("Failed to synchronize model availability:", err);
+    }
+  }
+
+  function applyModelAvailability(selectElement, modelsEnabled, allowEmpty) {
+    if (!selectElement) return;
+    const options = Array.from(selectElement.options);
+    let selectedOptionValid = false;
+
+    options.forEach((opt) => {
+      const val = opt.value;
+      if (!val) {
+        if (opt.selected) selectedOptionValid = true;
+        return;
+      }
+
+      const isEnabled = modelsEnabled[val] !== false;
+      opt.disabled = !isEnabled;
+
+      let baseText = opt.getAttribute("data-original-title");
+      if (!baseText) {
+        baseText = opt.textContent.replace(/\s*\((غیرفعال|غیرفعال در سرور)\)/g, "").trim();
+        opt.setAttribute("data-original-title", baseText);
+      }
+
+      if (!isEnabled) {
+        opt.textContent = `${baseText} (غیرفعال)`;
+        opt.classList.add("text-zinc-500", "bg-zinc-950");
+      } else {
+        opt.textContent = baseText;
+        opt.classList.remove("text-zinc-500", "bg-zinc-950");
+        if (opt.selected) {
+          selectedOptionValid = true;
+        }
+      }
+    });
+
+    // If currently selected option is disabled, automatically fallback to first enabled option
+    if (!selectedOptionValid) {
+      const firstEnabled = options.find((opt) => !opt.disabled);
+      if (firstEnabled) {
+        selectElement.value = firstEnabled.value;
+      }
+    }
+  }
+
+  // User-Friendly Persian Error Modal Handler
+  function showErrorModal({ status = 0, rawDetail = "", customMessage = "", errorCode = "" }) {
+    if (!errorModal) {
+      alert(customMessage || rawDetail || "خطایی رخ داده است.");
+      return;
+    }
+
+    let friendlyMessage = customMessage;
+    let code = errorCode;
+    const detailStr = typeof rawDetail === "string" ? rawDetail : JSON.stringify(rawDetail || "");
+    const lowerDetail = detailStr.toLowerCase();
+
+    if (!friendlyMessage) {
+      if (status === 401) {
+        friendlyMessage = "اعتبار نشست کاربری یا کلید API شما منقضی شده است. لطفاً مجدداً وارد سامانه شوید.";
+        code = code || "ERR-401";
+      } else if (status === 403) {
+        friendlyMessage = "حساب کاربری شما اجازه دسترسی به این بخش را ندارد.";
+        code = code || "ERR-403";
+      } else if (status === 413) {
+        friendlyMessage = "حجم فایل ارسالی بیشتر از حد مجاز سرور است. لطفاً فایلی با حجم کمتر بارگذاری فرمایید.";
+        code = code || "ERR-413";
+      } else if (lowerDetail.includes("is not active on this server") || (status === 400 && lowerDetail.includes("model"))) {
+        friendlyMessage = "مدل استخراج متن انتخابی در حال حاضر روی سرور فعال نیست. لطفاً مدل دیگری را انتخاب کرده یا با مدیر سایت تماس حاصل فرمایید.";
+        code = code || "ERR-400-MDL";
+      } else if (lowerDetail.includes("cuda") || lowerDetail.includes("out of memory") || lowerDetail.includes("memory")) {
+        friendlyMessage = "منابع پردازشی سرور موقتاً تکمیل است. لطفاً چند لحظه بعد مجدداً تلاش کرده یا از مدل‌های دیگر استفاده کنید.";
+        code = code || "ERR-503-MEM";
+      } else if (lowerDetail.includes("connection refused") || lowerDetail.includes("connect") || status === 502 || status === 503) {
+        friendlyMessage = "ارتباط سرور با موتور هوش مصنوعی برقرار نشد. سرویس پردازش تصویر موقتاً در دسترس نیست.";
+        code = code || "ERR-502-CONN";
+      } else if (lowerDetail.includes("timeout") || status === 504) {
+        friendlyMessage = "مدت زمان پردازش سند طولانی‌تر از حد انتظار شد و درخواست با تأخیر مواجه گردید.";
+        code = code || "ERR-504-TO";
+      } else if (status === 400) {
+        friendlyMessage = "اطلاعات یا فرمت فایل ارسالی نامعتبر است و پردازش سند امکان‌پذیر نمی‌باشد.";
+        code = code || "ERR-400";
+      } else {
+        friendlyMessage = "متأسفانه در فرآیند استخراج متن از سند، خطایی در سامانه رخ داده است.";
+        const randId = Math.random().toString(36).substring(2, 6).toUpperCase();
+        code = code || `ERR-${status || 500}-${randId}`;
+      }
+    }
+
+    if (!code) {
+      const randId = Math.random().toString(36).substring(2, 6).toUpperCase();
+      code = `ERR-${status || "SYS"}-${randId}`;
+    }
+
+    if (errorModalMessage) errorModalMessage.textContent = friendlyMessage;
+    if (errorModalCode) errorModalCode.textContent = code;
+
+    if (errorModalDetails) {
+      if (detailStr && detailStr.trim()) {
+        errorModalDetails.textContent = detailStr;
+        errorModalDetails.classList.add("hidden");
+        if (toggleErrorDetailsBtn) toggleErrorDetailsBtn.classList.remove("hidden");
+        if (errorDetailsChevron) errorDetailsChevron.classList.remove("rotate-180");
+      } else {
+        errorModalDetails.textContent = "";
+        if (toggleErrorDetailsBtn) toggleErrorDetailsBtn.classList.add("hidden");
+      }
+    }
+
+    errorModal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function closeErrorModal() {
+    if (errorModal) {
+      errorModal.classList.add("hidden");
+    }
+  }
+
+  if (closeErrorModalBtn) closeErrorModalBtn.addEventListener("click", closeErrorModal);
+  if (errorModalCloseBtn) errorModalCloseBtn.addEventListener("click", closeErrorModal);
+
+  if (errorModal) {
+    errorModal.addEventListener("click", (e) => {
+      if (e.target === errorModal) closeErrorModal();
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && errorModal && !errorModal.classList.contains("hidden")) {
+      closeErrorModal();
+    }
+  });
+
+  if (copyErrorCodeBtn) {
+    copyErrorCodeBtn.addEventListener("click", () => {
+      const codeText = errorModalCode ? errorModalCode.textContent : "";
+      if (codeText) {
+        navigator.clipboard.writeText(codeText).then(() => {
+          if (copyErrorBtnText) {
+            const original = copyErrorBtnText.textContent;
+            copyErrorBtnText.textContent = "کپی شد!";
+            setTimeout(() => { copyErrorBtnText.textContent = original; }, 2000);
+          }
+        });
+      }
+    });
+  }
+
+  if (toggleErrorDetailsBtn && errorModalDetails) {
+    toggleErrorDetailsBtn.addEventListener("click", () => {
+      const isHidden = errorModalDetails.classList.toggle("hidden");
+      if (errorDetailsChevron) {
+        errorDetailsChevron.classList.toggle("rotate-180", !isHidden);
+      }
+    });
+  }
 });

@@ -61,7 +61,7 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۳.۰</span>
+                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۴.۰</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
@@ -223,7 +223,10 @@
                             <option value="">هیچکدام (فقط پاکسازی تک‌مدلی)</option>
                             <option value="olmocr_2b" selected>OLMOCR 2B (VLM)</option>
                             <option value="gemma4">Gemma 4 (VLM 26B)</option>
-                            <option value="tesseract">Tesseract OCR</option>
+                            <option value="tesseract">Tesseract OCR (CPU)</option>
+                            <option value="docling">IBM Docling</option>
+                            <option value="qwen">Qwen 2 VL (GPU)</option>
+                            <option value="varco">Varco Vision (GPU)</option>
                         </select>
                         <p class="text-[11px] text-slate-400">هوش مصنوعی هر دو خروجی را بررسی کرده و نسخه بدون خطای ترکیبی تولید می‌کند.</p>
                     </div>
@@ -329,7 +332,7 @@
 
     <!-- Footer -->
     <footer class="border-t border-zinc-800/80 bg-[#121215]/40 py-6 mt-12 text-center text-xs text-slate-500">
-        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۲.۰ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
+        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۴.۰ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
     </footer>
 
     <!-- Token Management Modal -->
@@ -380,6 +383,71 @@
                     <span>تولید مجدد توکن تصادفی</span>
                 </button>
                 <button type="button" id="modal-cancel-btn" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-medium transition">
+                    بستن
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User-Friendly Error Modal -->
+    <div id="error-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-opacity duration-200">
+        <div class="bg-[#141417] border border-rose-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-4">
+            
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div class="flex items-center space-x-2.5 space-x-reverse">
+                    <div class="w-10 h-10 rounded-xl bg-rose-600/20 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                        <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">خطا در فرآیند استخراج متن</h3>
+                        <p class="text-[11px] text-slate-400">عدم موفقیت در پردازش سند</p>
+                    </div>
+                </div>
+                <button type="button" id="close-error-modal-btn" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Friendly Message -->
+            <div class="space-y-2">
+                <p id="error-modal-message" class="text-xs text-slate-200 leading-relaxed font-medium">
+                    متأسفانه در فرآیند استخراج متن از سند شما مشکلی پیش آمده است.
+                </p>
+            </div>
+
+            <!-- Error Code Card -->
+            <div class="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between">
+                <div>
+                    <span class="text-[11px] text-slate-400 block">کد پیگیری خطا:</span>
+                    <code id="error-modal-code" class="font-mono text-sm text-rose-400 font-bold select-all">ERR-500</code>
+                </div>
+                <button type="button" id="copy-error-code-btn" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-xs font-medium flex items-center space-x-1 space-x-reverse transition">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    <span id="copy-error-btn-text">کپی کد</span>
+                </button>
+            </div>
+
+            <!-- Contact Admin Notice -->
+            <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start space-x-2 space-x-reverse text-xs text-amber-300">
+                <i data-lucide="phone-call" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+                <p class="text-[11px] leading-relaxed">
+                    لطفاً این کد خطا را یادداشت نموده و جهت بررسی و حل مشکل، با <strong>مدیر سایت</strong> تماس حاصل فرمایید.
+                </p>
+            </div>
+
+            <!-- Collapsible Technical Details (for site admin) -->
+            <div class="space-y-1">
+                <button type="button" id="toggle-error-details-btn" class="text-[11px] text-slate-500 hover:text-slate-400 flex items-center space-x-1 space-x-reverse transition">
+                    <i data-lucide="chevron-down" id="error-details-chevron" class="w-3.5 h-3.5"></i>
+                    <span>مشاهده جزئیات فنی (مخصوص مدیر)</span>
+                </button>
+                <pre id="error-modal-details" class="hidden font-mono text-[10px] text-slate-400 p-2.5 bg-black/60 rounded-lg overflow-x-auto max-h-28 text-left dir-ltr" dir="ltr"></pre>
+            </div>
+
+            <!-- Footer Buttons -->
+            <div class="flex items-center justify-end space-x-2 space-x-reverse pt-3 border-t border-zinc-800">
+                <button type="button" id="error-modal-close-btn" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-medium transition">
                     بستن
                 </button>
             </div>
