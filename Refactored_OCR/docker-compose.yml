@@ -30,6 +30,9 @@ services:
         condition: service_healthy
     ports:
       - "3334:4567"
+      - "8001:4567"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:

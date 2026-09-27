@@ -33,9 +33,12 @@ RUN python -m pip install --upgrade pip
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+#RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    -r requirements.txt
 COPY download_ocr_models.py .
 RUN python download_ocr_models.py && rm download_ocr_models.py
-
 COPY . .
 
 ENV PYTHONUNBUFFERED=1
