@@ -1,6 +1,8 @@
 import os
 
-VERSION = "3.3.0"
+from typing import Union, Sequence
+
+VERSION = "3.3.1"
 
 try:
     from dotenv import load_dotenv
@@ -19,24 +21,34 @@ DATABASE_URL = os.environ.get(
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
-def get_bool_env(var_name: str, default: bool) -> bool:
-    val = os.environ.get(var_name)
-    if val is None:
-        return default
-    return val.strip().lower() in ("true", "1", "yes")
+def get_bool_env(var_names: Union[str, Sequence[str]], default: bool) -> bool:
+    """Read a boolean configuration value with support for multiple alias names."""
+    if isinstance(var_names, str):
+        var_names = [var_names]
+    for name in var_names:
+        val = os.environ.get(name)
+        if val is not None:
+            return val.strip().lower() in ("true", "1", "yes")
+    return default
 
 # Concurrency & Parallelism Tuning
 MAX_CONCURRENT_OCR = int(os.environ.get("MAX_CONCURRENT_OCR", 20))
 OCR_THREAD_WORKERS = int(os.environ.get("OCR_THREAD_WORKERS", 24))
 PDF_PAGE_WORKERS = int(os.environ.get("PDF_PAGE_WORKERS", 4))
 
-# OCR Model Loading Configuration
-LOAD_TESSERACT = get_bool_env("LOAD_TESSERACT", True)
-LOAD_DOCLING = get_bool_env("LOAD_DOCLING", False)
-LOAD_QWEN = get_bool_env("LOAD_QWEN", False)
-LOAD_VARCO = get_bool_env("LOAD_VARCO", False)
-LOAD_OLMOCR_2B = get_bool_env("LOAD_OLMOCR_2B", True)
-LOAD_GEMMA4 = get_bool_env("LOAD_GEMMA4", True)
+# OCR Model Loading Configuration (supports aliases like LOAD_OLMOCR or OLMOCR)
+LOAD_TESSERACT = get_bool_env(["LOAD_TESSERACT", "TESSERACT"], True)
+LOAD_DOCLING = get_bool_env(["LOAD_DOCLING", "DOCLING"], False)
+LOAD_QWEN = get_bool_env(["LOAD_QWEN", "QWEN"], False)
+LOAD_VARCO = get_bool_env(["LOAD_VARCO", "VARCO"], False)
+LOAD_OLMOCR_2B = get_bool_env(
+    ["LOAD_OLMOCR_2B", "LOAD_OLMOCR", "OLMOCR", "LOAD_OLMOCR_7B", "LOAD_OLM", "OLM"],
+    True
+)
+LOAD_GEMMA4 = get_bool_env(
+    ["LOAD_GEMMA4", "LOAD_GEMMA", "GEMMA4", "GEMMA"],
+    True
+)
 
 # OlmOCR VLM Engine
 OLMOCR_LLM_URL_V1 = os.environ.get("OLMOCR_LLM_URL_V1", "http://172.16.20.16:12346/v1")
@@ -85,10 +97,10 @@ ACCEPTED_LANGUAGES = ["eng", "ara", "fas"]
 # Default endpoint parameters
 DEFAULT_LANG = os.environ.get("DEFAULT_LANG", "eng+ara+fas")
 DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "tesseract")
-DEFAULT_PREPROCESS = get_bool_env("DEFAULT_PREPROCESS", False)
-DEFAULT_CONTRAST = get_bool_env("DEFAULT_CONTRAST", False)
+DEFAULT_PREPROCESS = get_bool_env(["DEFAULT_PREPROCESS", "PREPROCESS"], False)
+DEFAULT_CONTRAST = get_bool_env(["DEFAULT_CONTRAST", "CONTRAST"], False)
 DEFAULT_SCALE = float(os.environ.get("DEFAULT_SCALE", 1.0))
-DEFAULT_USE_LLM = get_bool_env("DEFAULT_USE_LLM", False)
+DEFAULT_USE_LLM = get_bool_env(["DEFAULT_USE_LLM", "USE_LLM"], False)
 DEFAULT_LLM_URL = os.environ.get("DEFAULT_LLM_URL", "http://10.0.38.50:50015/v1")
 DEFAULT_LLM_MODEL_NAME = os.environ.get("DEFAULT_LLM_MODEL_NAME", "/models/gemma-4-26B-A4B-it-Q8_0.gguf")
 DEFAULT_LLM_API_KEY = os.environ.get("DEFAULT_LLM_API_KEY", "no-key")

@@ -17,7 +17,7 @@ import socket
 import urllib.request
 import urllib.error
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
@@ -51,7 +51,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 class ModelName(str, Enum):
     gemma4 = "gemma4"
+    gemma = "gemma"
     olmocr_2b = "olmocr_2b"
+    olmocr = "olmocr"
     tesseract = "tesseract"
     docling = "docling"
     qwen = "qwen"
@@ -140,6 +142,7 @@ async def lifespan(app: FastAPI):
             default_langs=config.DEFAULT_LANG.split('+'),
             model_name=config.OLMOCR_MODEL_NAME
         )
+        loaded_models['olmocr'] = loaded_models['olmocr_2b']
         print("OlmOCR model loaded.")
 
     if config.LOAD_GEMMA4:
@@ -150,6 +153,7 @@ async def lifespan(app: FastAPI):
             default_langs=config.DEFAULT_LANG.split('+'),
             model_name=config.GEMMA4_MODEL_NAME
         )
+        loaded_models['gemma'] = loaded_models['gemma4']
         print("Gemma 4 VLM model loaded.")
 
     merger = LLMMerger(
@@ -571,13 +575,24 @@ def sync_probe_service_health(name: str, url: str, timeout: float) -> dict:
     summary="Check Remote LLM & OLM Health Status (Alias)",
     include_in_schema=False
 )
-async def check_remote_services_status():
+@app.get(
+    "/health",
+    response_model=HealthStatusResponse,
+    tags=["System Health"],
+    summary="Check Remote LLM & OLM Health Status (Alias)",
+    include_in_schema=False
+)
+async def check_remote_services_status(response: Response):
     """
     Checks connectivity and health of the remote LLM (Gemma/Merger) and OLM (OlmOCR) services.
     
     Probes the `/health` endpoint of each server using Python's standard library and reports
     whether it is online (e.g. `{"status":"ok"}`), timed out, or offline, along with response latency in milliseconds.
     """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     timeout = config.HEALTH_CHECK_TIMEOUT
     llm_url = config.get_llm_health_url()
     olm_url = config.get_olm_health_url()
@@ -608,15 +623,29 @@ async def check_remote_services_status():
     tags=["System Health"],
     summary="Check Loaded Models Readiness"
 )
-def health_models():
+@app.get(
+    "/models",
+    tags=["System Health"],
+    summary="Check Loaded Models Readiness (Alias)",
+    include_in_schema=False
+)
+def health_models(response: Response):
     """Returns the readiness status of all AI vision and OCR models currently loaded in memory."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     if not ocr_service or not ocr_service.models:
         return {}
     return {model: "loaded" for model in ocr_service.models}
 
 @app.get("/health/config", include_in_schema=False)
-def health_config():
+def health_config(response: Response):
     """Runtime configuration and active parameters with masked secrets."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     return config.get_config_dict()
 
 if __name__ == "__main__":

@@ -39,4 +39,5 @@ RUN python download_ocr_models.py && rm download_ocr_models.py
 COPY . .
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 CMD ["python", "-u", "main.py"]

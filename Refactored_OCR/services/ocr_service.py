@@ -38,13 +38,17 @@ class OCRService:
         start_t = time.time()
         primary_model = self.models.get(primary_model_name)
         if not primary_model:
-            # Fallback for old model names or handle error
-            if primary_model_name == "olmocr+tesseract+llm":
-                 primary_model = self.models.get("olmocr_2b")
-                 secondary_model_name = "tesseract"
-                 use_llm = True
-            else:
-                 raise ValueError(f"Primary model {primary_model_name} not found")
+            if primary_model_name in ("olmocr", "olmocr_7b"):
+                primary_model = self.models.get("olmocr_2b")
+            elif primary_model_name in ("gemma", "gemma_4"):
+                primary_model = self.models.get("gemma4")
+            elif primary_model_name == "olmocr+tesseract+llm":
+                primary_model = self.models.get("olmocr_2b")
+                secondary_model_name = "tesseract"
+                use_llm = True
+
+        if not primary_model:
+            raise ValueError(f"Primary model {primary_model_name} not found")
 
         text1 = primary_model.process(processed_image, lang)
         ocr_duration = time.time() - start_t
@@ -57,6 +61,11 @@ class OCRService:
         if use_llm:
             if secondary_model_name:
                 secondary_model = self.models.get(secondary_model_name)
+                if not secondary_model:
+                    if secondary_model_name in ("olmocr", "olmocr_7b"):
+                        secondary_model = self.models.get("olmocr_2b")
+                    elif secondary_model_name in ("gemma", "gemma_4"):
+                        secondary_model = self.models.get("gemma4")
                 if secondary_model:
                     text2 = secondary_model.process(processed_image, lang)
                     ocr_outputs.append(text2)
