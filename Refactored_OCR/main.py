@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 import tempfile
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
