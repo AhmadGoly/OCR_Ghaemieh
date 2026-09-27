@@ -50,7 +50,14 @@ async def get_current_user(
             )
 
     # 2. Check Authorization Bearer header
-    raw_bearer = auth.credentials if auth and auth.credentials else None
+    raw_bearer = None
+    if isinstance(auth, HTTPAuthorizationCredentials) and auth.credentials:
+        raw_bearer = auth.credentials.strip()
+    else:
+        auth_hdr = request.headers.get("authorization")
+        if auth_hdr and auth_hdr.strip().lower().startswith("bearer "):
+            raw_bearer = auth_hdr.strip()[7:].strip()
+
     if raw_bearer:
         raw_bearer = raw_bearer.strip()
         # If it's formatted as an API key (sk-gh-...)
@@ -190,7 +197,7 @@ async def check_docs_access(
 
     user = None
     try:
-        user = await get_current_user(request=request, db=db)
+        user = await get_current_user(request=request, auth=None, db=db)
     except HTTPException:
         pass
 

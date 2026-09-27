@@ -2,7 +2,7 @@ import os
 
 from typing import Union, Sequence
 
-VERSION = "3.6.1"
+VERSION = "3.6.2"
 
 try:
     from dotenv import load_dotenv
