@@ -61,7 +61,7 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۵.۰</span>
+                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۶.۰</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
@@ -191,21 +191,28 @@
                     </div>
                 </div>
 
+                <!-- Inter-Page Cooldown (Rest Time for Books) -->
+                <div class="space-y-1.5">
+                    <label for="cooldown-input" class="font-semibold text-slate-300">استراحت بین صفحات کتاب (ثانیه):</label>
+                    <input type="number" id="cooldown-input" value="1.0" min="0" max="60" step="0.5" class="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white outline-none focus:border-red-500" />
+                    <p class="hint hidden text-[11px] text-slate-400">زمان تنفس و استراحت سرور بین پردازش هر صفحه در حالت پردازش پس‌زمینه کتاب.</p>
+                </div>
+
                 <!-- Preprocessing Toggles -->
-                <div class="space-y-2 col-span-1 md:col-span-2">
+                <div class="space-y-2 col-span-1">
                     <label class="font-semibold text-slate-300">بهینه‌سازی و فیلترهای تصویر:</label>
-                    <div class="flex flex-wrap gap-4 pt-1">
-                        <label class="inline-flex items-center space-x-2 space-x-reverse cursor-pointer">
+                    <div class="flex flex-wrap gap-3 pt-1">
+                        <label class="inline-flex items-center space-x-1.5 space-x-reverse cursor-pointer">
                             <input type="checkbox" id="preprocess-toggle" checked class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
-                            <span class="text-xs text-slate-300">پیش‌پردازش خاکستری</span>
+                            <span class="text-xs text-slate-300">خاکستری</span>
                         </label>
-                        <label class="inline-flex items-center space-x-2 space-x-reverse cursor-pointer">
+                        <label class="inline-flex items-center space-x-1.5 space-x-reverse cursor-pointer">
                             <input type="checkbox" id="contrast-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
-                            <span class="text-xs text-slate-300">افزایش کنتراست (CLAHE)</span>
+                            <span class="text-xs text-slate-300">کنتراست (CLAHE)</span>
                         </label>
-                        <label class="inline-flex items-center space-x-2 space-x-reverse cursor-pointer">
+                        <label class="inline-flex items-center space-x-1.5 space-x-reverse cursor-pointer">
                             <input type="checkbox" id="crop-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
-                            <span class="text-xs text-slate-300">برش حاشیه‌های سفید</span>
+                            <span class="text-xs text-slate-300">برش حاشیه سفید</span>
                         </label>
                     </div>
                 </div>
@@ -234,12 +241,22 @@
 
             </div>
 
-            <!-- Submit Button -->
-            <div class="pt-4 border-t border-zinc-800/80 flex items-center justify-end">
-                <button type="button" id="submit-button" disabled class="px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-xl shadow-red-950/40 transition flex items-center space-x-2 space-x-reverse">
-                    <i data-lucide="play" class="w-4 h-4"></i>
-                    <span>شروع استخراج متن</span>
-                </button>
+            <!-- Submit Action Buttons (Instant vs Background Book Task) -->
+            <div class="pt-4 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
+                <p class="text-[11px] text-slate-400">
+                    <i data-lucide="info" class="w-3.5 h-3.5 inline ml-1 text-amber-400"></i>
+                    برای کتاب‌ها و اسناد چندصفحه‌ای، از دکمه <strong>«ثبت در صف پردازش کتاب (پس‌زمینه)»</strong> استفاده کنید تا در صورت خطا یا بستن مرورگر، پردازش ادامه یابد.
+                </p>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="button" id="submit-book-task-button" disabled class="px-5 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-amber-500/40 text-amber-300 hover:text-amber-200 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs shadow-lg transition flex items-center space-x-2 space-x-reverse">
+                        <i data-lucide="book-open-check" class="w-4 h-4 text-amber-400"></i>
+                        <span>ثبت در صف پردازش کتاب (پس‌زمینه)</span>
+                    </button>
+                    <button type="button" id="submit-button" disabled class="px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-xl shadow-red-950/40 transition flex items-center space-x-2 space-x-reverse">
+                        <i data-lucide="play" class="w-4 h-4"></i>
+                        <span>شروع استخراج فوری</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -328,12 +345,81 @@
 
         </div>
 
+        <!-- Background Book OCR Tasks Dashboard -->
+        <div id="book-tasks-section" class="bg-[#121215]/80 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+                        <i data-lucide="library" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2 space-x-reverse">
+                            <h3 class="text-sm font-bold text-white">صندوق وظایف پردازش کتاب (پس‌زمینه)</h3>
+                            <span id="active-book-tasks-badge" class="hidden text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">در حال پردازش...</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-0.5">کتاب‌های آپلود شده در پس‌زمینه صفحه به صفحه با ذخیره خودکار و تلاش مجدد استخراج می‌شوند و پس از اتمام قابل دانلود هستند.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2.5 space-x-reverse text-xs">
+                    <label for="tasks-limit-select" class="text-slate-400">تعداد نمایش (N):</label>
+                    <select id="tasks-limit-select" class="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white outline-none focus:border-red-500">
+                        <option value="5">۵ مورد آخر</option>
+                        <option value="10" selected>۱۰ مورد آخر</option>
+                        <option value="20">۲۰ مورد آخر</option>
+                        <option value="50">۵۰ مورد آخر</option>
+                    </select>
+                    <button type="button" id="refresh-tasks-btn" class="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-200 font-medium transition flex items-center space-x-1.5 space-x-reverse">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span>بروزرسانی</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tasks List Container -->
+            <div id="book-tasks-list" class="space-y-3">
+                <div class="text-center py-8 text-xs text-slate-500">
+                    در حال بارگذاری لیست وظایف...
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <!-- Footer -->
     <footer class="border-t border-zinc-800/80 bg-[#121215]/40 py-6 mt-12 text-center text-xs text-slate-500">
-        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۵.۰ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
+        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۶.۰ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
     </footer>
+
+    <!-- Task Pages Detail Modal -->
+    <div id="task-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div class="bg-[#141417] border border-zinc-700 rounded-2xl max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-zinc-800 flex items-center justify-between">
+                <div class="flex items-center space-x-2.5 space-x-reverse">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                        <i data-lucide="book-open" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 id="task-detail-title" class="text-sm font-bold text-white">جزئیات صفحات کتاب</h3>
+                        <p id="task-detail-subtitle" class="text-[11px] text-slate-400"></p>
+                    </div>
+                </div>
+                <button type="button" id="close-task-detail-btn" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-zinc-800 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div id="task-detail-pages-body" class="p-5 overflow-y-auto space-y-3 flex-1 text-xs">
+            </div>
+
+            <div class="p-4 border-t border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+                <span id="task-detail-footer-summary" class="text-[11px] text-slate-400"></span>
+                <button type="button" id="task-detail-close-footer-btn" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-xs font-medium transition">
+                    بستن
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Token Management Modal -->
     <div id="token-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">

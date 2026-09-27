@@ -2,7 +2,7 @@ import os
 
 from typing import Union, Sequence
 
-VERSION = "3.5.0"
+VERSION = "3.6.0"
 
 try:
     from dotenv import load_dotenv
@@ -40,6 +40,18 @@ PDF_PAGE_WORKERS = int(os.environ.get("PDF_PAGE_WORKERS", 4))
 LOCAL_GPU_CONCURRENCY_LIMIT = int(os.environ.get("LOCAL_GPU_CONCURRENCY_LIMIT", 2))
 MAX_USER_CONCURRENT_OCR = int(os.environ.get("MAX_USER_CONCURRENT_OCR", 4))
 QUEUE_TIMEOUT_SECONDS = float(os.environ.get("QUEUE_TIMEOUT_SECONDS", 90.0))
+
+# Background Book / Batch Task Processing Configuration
+TASK_STORAGE_DIR = os.environ.get(
+    "TASK_STORAGE_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", "tasks")
+)
+TASK_WORKER_CONCURRENCY = int(os.environ.get("TASK_WORKER_CONCURRENCY", 2))
+TASK_PAGE_COOLDOWN_SECONDS = float(os.environ.get("TASK_PAGE_COOLDOWN_SECONDS", 1.0))
+TASK_MAX_PAGE_RETRIES = int(os.environ.get("TASK_MAX_PAGE_RETRIES", 3))
+TASK_DEFAULT_LIST_LIMIT = int(os.environ.get("TASK_DEFAULT_LIST_LIMIT", 10))
+TASK_MAX_LIST_LIMIT = int(os.environ.get("TASK_MAX_LIST_LIMIT", 100))
+TASK_RETENTION_DAYS = int(os.environ.get("TASK_RETENTION_DAYS", 7))
 
 # API Documentation & Schema Security
 DOCS_REQUIRE_AUTH = get_bool_env(["DOCS_REQUIRE_AUTH"], True)
@@ -174,6 +186,14 @@ def get_config_dict() -> dict:
         "docs_security": {
             "require_auth": DOCS_REQUIRE_AUTH,
             "require_admin": DOCS_REQUIRE_ADMIN,
+        },
+        "task_processing": {
+            "worker_concurrency": TASK_WORKER_CONCURRENCY,
+            "page_cooldown_seconds": TASK_PAGE_COOLDOWN_SECONDS,
+            "max_page_retries": TASK_MAX_PAGE_RETRIES,
+            "default_list_limit": TASK_DEFAULT_LIST_LIMIT,
+            "max_list_limit": TASK_MAX_LIST_LIMIT,
+            "retention_days": TASK_RETENTION_DAYS,
         },
         "defaults": {
             "model": DEFAULT_MODEL,

@@ -62,9 +62,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const errorDetailsChevron = document.getElementById("error-details-chevron");
   const appVersionBadge = document.getElementById("app-version-badge");
 
+  // Background Book Tasks Elements
+  const submitBookTaskButton = document.getElementById("submit-book-task-button");
+  const cooldownInput = document.getElementById("cooldown-input");
+  const bookTasksSection = document.getElementById("book-tasks-section");
+  const bookTasksList = document.getElementById("book-tasks-list");
+  const tasksLimitSelect = document.getElementById("tasks-limit-select");
+  const refreshTasksBtn = document.getElementById("refresh-tasks-btn");
+  const activeBookTasksBadge = document.getElementById("active-book-tasks-badge");
+
+  // Task Detail Modal Elements
+  const taskDetailModal = document.getElementById("task-detail-modal");
+  const taskDetailTitle = document.getElementById("task-detail-title");
+  const taskDetailSubtitle = document.getElementById("task-detail-subtitle");
+  const taskDetailPagesBody = document.getElementById("task-detail-pages-body");
+  const taskDetailFooterSummary = document.getElementById("task-detail-footer-summary");
+  const closeTaskDetailBtn = document.getElementById("close-task-detail-btn");
+  const taskDetailCloseFooterBtn = document.getElementById("task-detail-close-footer-btn");
+
   let selectedFile = null;
   let currentUserToken = null;
   let currentUser = null;
+  let tasksPollTimer = null;
+  let openDetailTaskId = null;
 
   // Initialize Lucide icons
   if (window.lucide) {
@@ -90,6 +110,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Retrieve user's API token
       await fetchUserToken();
+
+      // Load user's background book tasks
+      await fetchBookTasks();
 
       // Render top navigation bar
       let navHtml = `
@@ -164,10 +187,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (curlCodeBlock) {
       const origin = window.location.origin;
-      curlCodeBlock.textContent = `curl -X POST "${origin}/ocr/image" \\
-  -H "X-API-Key: ${currentUserToken}" \\
-  -F "file=@document.jpg" \\
-  -F "model=gemma4"`;
+      curlCodeBlock.textContent = `# ۱. استخراج فوری تصویر:\ncurl -X POST "${origin}/ocr/image" \\\n  -H "X-API-Key: ${currentUserToken}" \\\n  -F "file=@document.jpg" \\\n  -F "model=gemma4"\n\n# ۲. ثبت کتاب در صف پس‌زمینه:\ncurl -X POST "${origin}/api/tasks/book" \\\n  -H "X-API-Key: ${currentUserToken}" \\\n  -F "file=@book.pdf" \\\n  -F "model=gemma4" \\\n  -F "cooldown_seconds=1.0"`;
     }
   }
 
@@ -355,6 +375,9 @@ document.addEventListener("DOMContentLoaded", () => {
     fileSizeDisplay.textContent = formatBytes(file.size);
     fileSelectedBadge.classList.remove("hidden");
     submitButton.disabled = false;
+    if (submitBookTaskButton) {
+      submitBookTaskButton.disabled = false;
+    }
 
     // Toggle PDF page inputs
     const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
@@ -702,6 +725,485 @@ document.addEventListener("DOMContentLoaded", () => {
       if (errorDetailsChevron) {
         errorDetailsChevron.classList.toggle("rotate-180", !isHidden);
       }
+    });
+  }
+
+  // =========================================================================
+  // Background Book Tasks Management (Submit, Poll, Progress, Retry, Download)
+  // =========================================================================
+
+  function getAuthHeaders() {
+    const headers = {};
+    if (currentUserToken) {
+      headers["X-API-Key"] = currentUserToken;
+    }
+    return headers;
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function formatDurationEta(seconds) {
+    if (seconds === null || seconds === undefined || seconds <= 0) return "";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    if (mins > 0) {
+      return `حدود ${mins} دقیقه و ${secs} ثانیه`;
+    }
+    return `حدود ${secs} ثانیه`;
+  }
+
+  // Submit Book Task (POST /api/tasks/book)
+  if (submitBookTaskButton) {
+    submitBookTaskButton.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("model", modelSelect.value);
+      formData.append("lang", langSelect.value);
+      formData.append("preprocess", preprocessToggle.checked);
+      formData.append("contrast", contrastToggle.checked);
+      formData.append("crop_whitespaces", cropToggle.checked);
+      formData.append("scale", scaleSlider.value);
+      formData.append("use_llm", llmToggle.checked);
+      formData.append("cooldown_seconds", cooldownInput ? cooldownInput.value || "1.0" : "1.0");
+
+      if (llmToggle.checked && secondaryModelSelect.value) {
+        formData.append("secondary_model", secondaryModelSelect.value);
+      }
+
+      if (selectedFile.type === "application/pdf" || selectedFile.name.endsWith(".pdf")) {
+        if (startPageInput.value) formData.append("start_page", startPageInput.value);
+        if (endPageInput.value) formData.append("end_page", endPageInput.value);
+      }
+
+      const originalBtnHtml = submitBookTaskButton.innerHTML;
+      submitBookTaskButton.disabled = true;
+      submitButton.disabled = true;
+      submitBookTaskButton.innerHTML = `
+        <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-amber-400"></i>
+        <span>در حال ثبت کتاب در صف...</span>
+      `;
+      if (window.lucide) lucide.createIcons();
+
+      try {
+        const response = await fetch("/api/tasks/book", {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: formData,
+        });
+
+        if (response.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
+
+        if (!response.ok) {
+          let errDetail = "خطا در ثبت وظیفه پردازش کتاب";
+          try {
+            const errJson = await response.json();
+            errDetail = errJson.detail || errDetail;
+          } catch (_) {}
+          showErrorModal({ status: response.status, rawDetail: errDetail });
+          return;
+        }
+
+        await fetchBookTasks();
+        if (bookTasksSection) {
+          window.scrollTo({ top: bookTasksSection.offsetTop - 40, behavior: "smooth" });
+        }
+      } catch (err) {
+        showErrorModal({ status: 0, rawDetail: err.message || String(err) });
+      } finally {
+        submitBookTaskButton.disabled = !selectedFile;
+        submitButton.disabled = !selectedFile;
+        submitBookTaskButton.innerHTML = originalBtnHtml;
+        if (window.lucide) lucide.createIcons();
+      }
+    });
+  }
+
+  if (tasksLimitSelect) {
+    tasksLimitSelect.addEventListener("change", () => {
+      fetchBookTasks();
+    });
+  }
+
+  if (refreshTasksBtn) {
+    refreshTasksBtn.addEventListener("click", () => {
+      fetchBookTasks();
+    });
+  }
+
+  async function fetchBookTasks() {
+    if (!bookTasksList) return;
+    const nVal = tasksLimitSelect ? tasksLimitSelect.value : 10;
+    try {
+      const res = await fetch(`/api/tasks?n=${encodeURIComponent(nVal)}`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const tasks = data.tasks || [];
+      renderBookTasks(tasks);
+
+      const hasActive = tasks.some((t) => t.status === "queued" || t.status === "processing");
+      if (activeBookTasksBadge) {
+        activeBookTasksBadge.classList.toggle("hidden", !hasActive);
+      }
+
+      if (hasActive) {
+        startTasksPolling();
+      } else {
+        stopTasksPolling();
+      }
+
+      if (openDetailTaskId) {
+        await refreshTaskDetailModal(openDetailTaskId, false);
+      }
+    } catch (err) {
+      console.warn("Error fetching book tasks:", err);
+    }
+  }
+
+  function startTasksPolling() {
+    if (tasksPollTimer) return;
+    tasksPollTimer = setInterval(() => {
+      fetchBookTasks();
+    }, 3000);
+  }
+
+  function stopTasksPolling() {
+    if (tasksPollTimer) {
+      clearInterval(tasksPollTimer);
+      tasksPollTimer = null;
+    }
+  }
+
+  function getStatusMeta(task) {
+    switch (task.status) {
+      case "queued":
+        return {
+          label: "در صف انتظار",
+          badgeClass: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+          barClass: "bg-amber-500",
+        };
+      case "processing":
+        return {
+          label: task.current_page ? `در حال پردازش (صفحه ${task.current_page})` : "در حال پردازش...",
+          badgeClass: "bg-blue-500/20 text-blue-300 border-blue-500/30 animate-pulse",
+          barClass: "bg-gradient-to-r from-blue-500 to-emerald-500",
+        };
+      case "completed":
+        return {
+          label: "تکمیل شده",
+          badgeClass: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+          barClass: "bg-emerald-500",
+        };
+      case "completed_with_errors":
+        return {
+          label: `تکمیل با ${task.failed_pages} صفحه خطا`,
+          badgeClass: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+          barClass: "bg-amber-500",
+        };
+      case "cancelled":
+        return {
+          label: "متوقف شده",
+          badgeClass: "bg-zinc-700/60 text-slate-300 border-zinc-600",
+          barClass: "bg-zinc-500",
+        };
+      default:
+        return {
+          label: "ناموفق",
+          badgeClass: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+          barClass: "bg-rose-500",
+        };
+    }
+  }
+
+  function renderBookTasks(tasks) {
+    if (!bookTasksList) return;
+    if (!tasks || tasks.length === 0) {
+      bookTasksList.innerHTML = `
+        <div class="text-center py-8 bg-zinc-900/40 rounded-xl border border-zinc-800/80 text-xs text-slate-400 space-y-1">
+          <p class="font-semibold text-slate-300">هنوز هیچ کتاب یا وظیفه پس‌زمینه‌ای ثبت نشده است.</p>
+          <p class="text-[11px] text-slate-500">فایل کتاب (PDF) خود را در بخش بالا انتخاب کرده و دکمه «ثبت در صف پردازش کتاب» را بزنید.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const tokenParam = currentUserToken ? `&api_key=${encodeURIComponent(currentUserToken)}` : "";
+
+    bookTasksList.innerHTML = tasks
+      .map((t) => {
+        const meta = getStatusMeta(t);
+        const createdDate = t.created_at ? new Date(t.created_at).toLocaleString("fa-IR") : "";
+        const pct = t.progress_percent || 0;
+        const etaText = t.eta_seconds ? `زمان تقریبی باقی‌مانده: ${formatDurationEta(t.eta_seconds)}` : "";
+
+        let downloadBtns = "";
+        if (t.can_download) {
+          downloadBtns = `
+            <div class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-zinc-800/80">
+              <span class="text-[11px] text-slate-400 ml-1">دانلود خروجی کتاب:</span>
+              <a href="/api/tasks/${encodeURIComponent(t.task_id)}/download?format=txt${tokenParam}" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold transition flex items-center space-x-1 space-x-reverse">
+                <i data-lucide="file-text" class="w-3 h-3"></i>
+                <span>متنی (TXT)</span>
+              </a>
+              <a href="/api/tasks/${encodeURIComponent(t.task_id)}/download?format=html${tokenParam}" class="px-2.5 py-1 rounded-lg bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 text-[11px] font-semibold transition flex items-center space-x-1 space-x-reverse">
+                <i data-lucide="book-open" class="w-3 h-3"></i>
+                <span>کتاب چاپی (HTML)</span>
+              </a>
+              <a href="/api/tasks/${encodeURIComponent(t.task_id)}/download?format=md${tokenParam}" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-[11px] transition">
+                Markdown
+              </a>
+              <a href="/api/tasks/${encodeURIComponent(t.task_id)}/download?format=zip${tokenParam}" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-[11px] transition">
+                بسته ZIP
+              </a>
+              <a href="/api/tasks/${encodeURIComponent(t.task_id)}/download?format=json${tokenParam}" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-[11px] transition font-mono">
+                JSON
+              </a>
+            </div>
+          `;
+        }
+
+        let errorBanner = "";
+        if (t.error_message) {
+          errorBanner = `
+            <div class="p-2 rounded-lg bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-300 flex items-center justify-between gap-2">
+              <span>${escapeHtml(t.error_message)}</span>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="p-4 rounded-xl bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 transition space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center space-x-2.5 space-x-reverse">
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${meta.badgeClass}">
+                  ${escapeHtml(meta.label)}
+                </span>
+                <span class="font-bold text-xs text-white">${escapeHtml(t.filename)}</span>
+                <span class="text-[11px] text-red-400 bg-red-950/40 border border-red-500/20 px-2 py-0.5 rounded-md font-mono">
+                  ${escapeHtml(t.primary_model)}${t.use_llm ? " + LLM" : ""}
+                </span>
+              </div>
+
+              <div class="flex items-center space-x-1.5 space-x-reverse text-[11px]">
+                <span class="text-slate-500 ml-2">${escapeHtml(createdDate)}</span>
+                <button type="button" data-action="detail" data-task-id="${escapeHtml(t.task_id)}" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-200 transition flex items-center space-x-1 space-x-reverse">
+                  <i data-lucide="eye" class="w-3.5 h-3.5 text-amber-400"></i>
+                  <span>جزئیات صفحات</span>
+                </button>
+                ${
+                  t.can_retry
+                    ? `<button type="button" data-action="retry" data-task-id="${escapeHtml(t.task_id)}" class="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 font-semibold transition flex items-center space-x-1 space-x-reverse">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                        <span>تلاش مجدد صفحات ناموفق</span>
+                      </button>`
+                    : ""
+                }
+                ${
+                  t.can_cancel
+                    ? `<button type="button" data-action="cancel" data-task-id="${escapeHtml(t.task_id)}" class="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 transition flex items-center space-x-1 space-x-reverse">
+                        <i data-lucide="square" class="w-3.5 h-3.5"></i>
+                        <span>توقف</span>
+                      </button>`
+                    : ""
+                }
+                <button type="button" data-action="delete" data-task-id="${escapeHtml(t.task_id)}" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition" title="حذف وظیفه">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Progress Bar & Page Counters -->
+            <div class="space-y-1.5">
+              <div class="flex flex-wrap items-center justify-between text-[11px] text-slate-400">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                  <span>پیشرفت کل: <strong class="text-white">${pct}%</strong></span>
+                  <span>موفق: <strong class="text-emerald-400">${t.completed_pages}</strong> از <strong>${t.total_pages}</strong> صفحه</span>
+                  ${t.failed_pages > 0 ? `<span>ناموفق: <strong class="text-rose-400">${t.failed_pages}</strong></span>` : ""}
+                  <span>استراحت بین صفحات: <strong class="text-slate-300">${t.cooldown_seconds} ثانیه</strong></span>
+                </div>
+                <span class="text-amber-300/90">${escapeHtml(etaText)}</span>
+              </div>
+              <div class="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div class="h-full ${meta.barClass} transition-all duration-500 rounded-full" style="width: ${pct}%"></div>
+              </div>
+            </div>
+
+            ${errorBanner}
+            ${downloadBtns}
+          </div>
+        `;
+      })
+      .join("");
+
+    if (window.lucide) lucide.createIcons();
+  }
+
+  // Event delegation for task action buttons (detail, retry, cancel, delete)
+  if (bookTasksList) {
+    bookTasksList.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const action = btn.getAttribute("data-action");
+      const taskId = btn.getAttribute("data-task-id");
+      if (!taskId) return;
+
+      if (action === "detail") {
+        await openTaskDetailModal(taskId);
+      } else if (action === "retry") {
+        await retryBookTask(taskId);
+      } else if (action === "cancel") {
+        await cancelBookTask(taskId);
+      } else if (action === "delete") {
+        await deleteBookTask(taskId);
+      }
+    });
+  }
+
+  async function retryBookTask(taskId) {
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/retry`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showErrorModal({ status: res.status, rawDetail: data.detail || "خطا در تلاش مجدد" });
+        return;
+      }
+      await fetchBookTasks();
+    } catch (err) {
+      showErrorModal({ status: 0, rawDetail: err.message });
+    }
+  }
+
+  async function cancelBookTask(taskId) {
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/cancel`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        await fetchBookTasks();
+      }
+    } catch (err) {
+      console.error("Failed to cancel task:", err);
+    }
+  }
+
+  async function deleteBookTask(taskId) {
+    if (!confirm("آیا از حذف این وظیفه و فایل کتاب مربوط به آن اطمینان دارید؟")) return;
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        await fetchBookTasks();
+      }
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+    }
+  }
+
+  async function openTaskDetailModal(taskId) {
+    if (!taskDetailModal) return;
+    openDetailTaskId = taskId;
+    taskDetailModal.classList.remove("hidden");
+    taskDetailPagesBody.innerHTML = `<div class="text-center py-8 text-slate-400">در حال بارگذاری وضعیت صفحات...</div>`;
+    await refreshTaskDetailModal(taskId, true);
+  }
+
+  async function refreshTaskDetailModal(taskId, showErrors) {
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}?include_pages=true`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) return;
+      const t = await res.json();
+
+      if (taskDetailTitle) {
+        taskDetailTitle.textContent = `جزئیات صفحات: ${t.filename}`;
+      }
+      if (taskDetailSubtitle) {
+        taskDetailSubtitle.textContent = `مدل: ${t.primary_model} | پیشرفت: ${t.progress_percent}% (${t.completed_pages} موفق از ${t.total_pages} صفحه)`;
+      }
+      if (taskDetailFooterSummary) {
+        taskDetailFooterSummary.textContent = `مجموع زمان استخراج: ${t.total_ocr_duration} ثانیه | خطاها: ${t.failed_pages} صفحه`;
+      }
+
+      const pages = t.pages || [];
+      taskDetailPagesBody.innerHTML = pages
+        .map((p) => {
+          let statusBadge = "";
+          if (p.status === "completed") {
+            statusBadge = `<span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">تکمیل شده (${p.ocr_duration}s)</span>`;
+          } else if (p.status === "processing") {
+            statusBadge = `<span class="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold animate-pulse">در حال استخراج...</span>`;
+          } else if (p.status === "failed") {
+            statusBadge = `<span class="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold">ناموفق (${p.retry_count} تلاش)</span>`;
+          } else {
+            statusBadge = `<span class="px-2 py-0.5 rounded-md bg-zinc-800 text-slate-400 text-[10px]">در نوبت</span>`;
+          }
+
+          return `
+            <div class="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2 space-x-reverse">
+                  <span class="font-bold text-white">صفحه ${p.page_number}</span>
+                  ${statusBadge}
+                  ${p.retry_count > 0 && p.status === "completed" ? `<span class="text-[10px] text-amber-400">(موفق پس از ${p.retry_count} تلاش مجدد)</span>` : ""}
+                </div>
+                <span class="text-[10px] text-slate-500">${p.char_count || 0} کاراکتر</span>
+              </div>
+              ${
+                p.last_error
+                  ? `<div class="p-2 rounded-lg bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-300">${escapeHtml(p.last_error)}</div>`
+                  : ""
+              }
+              ${
+                p.text
+                  ? `<div class="p-2.5 rounded-lg bg-black/50 border border-zinc-800/80 text-slate-200 text-xs leading-relaxed max-h-36 overflow-y-auto whitespace-pre-wrap">${escapeHtml(p.text)}</div>`
+                  : ""
+              }
+            </div>
+          `;
+        })
+        .join("");
+
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      if (showErrors) {
+        console.error("Failed to load task details:", err);
+      }
+    }
+  }
+
+  function closeTaskDetailModal() {
+    openDetailTaskId = null;
+    if (taskDetailModal) {
+      taskDetailModal.classList.add("hidden");
+    }
+  }
+
+  if (closeTaskDetailBtn) closeTaskDetailBtn.addEventListener("click", closeTaskDetailModal);
+  if (taskDetailCloseFooterBtn) taskDetailCloseFooterBtn.addEventListener("click", closeTaskDetailModal);
+  if (taskDetailModal) {
+    taskDetailModal.addEventListener("click", (e) => {
+      if (e.target === taskDetailModal) closeTaskDetailModal();
     });
   }
 });

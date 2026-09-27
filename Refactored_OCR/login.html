@@ -132,7 +132,7 @@
 
         <!-- Footer -->
         <p class="text-center text-xs text-slate-500 mt-6">
-            سامانه پردازش اسناد و OCR قائمیه &bull; نسخه ۳.۵.۰
+            سامانه پردازش اسناد و OCR قائمیه &bull; نسخه ۳.۶.۰
         </p>
     </div>
 
@@ -161,8 +161,11 @@
                             throw new Error(data.detail || 'خطا در برقراری ارتباط');
                         }
                         
-                        // If admin redirect to /admin, else to /
-                        if (data.user && data.user.is_admin) {
+                        const params = new URLSearchParams(window.location.search);
+                        const nextUrl = params.get('next');
+                        if (nextUrl && nextUrl.startsWith('/')) {
+                            window.location.href = nextUrl;
+                        } else if (data.user && data.user.is_admin) {
                             window.location.href = '/admin';
                         } else {
                             window.location.href = '/';

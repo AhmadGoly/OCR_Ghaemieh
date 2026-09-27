@@ -38,6 +38,7 @@ from models.gemma import GemmaVLMModel
 from services.merger import LLMMerger
 from services.ocr_service import OCRService
 from services.queue_manager import queue_manager
+from services.task_manager import task_manager
 
 from db.init_db import init_database
 from db.session import get_db
@@ -45,6 +46,7 @@ from db.models import User, ExtractionHistory
 from api.auth import router as auth_router
 from api.admin import router as admin_router
 from api.user import router as user_router
+from api.tasks import router as tasks_router
 from core.deps import get_current_user, get_current_user_optional, check_docs_access, require_admin
 from core.security import decode_access_token
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -173,11 +175,14 @@ async def lifespan(app: FastAPI):
     )
 
     ocr_service = OCRService(models=loaded_models, merger=merger)
+    await task_manager.start(ocr_service, ocr_executor)
 
     print("-" * 20)
     print(f"Startup complete. Models loaded: {list(loaded_models.keys())}")
     print("-" * 20)
     yield
+    print("Stopping background book task workers...")
+    await task_manager.stop()
     print("Shutting down OCR thread pool executor...")
     ocr_executor.shutdown(wait=False)
 
@@ -227,27 +232,22 @@ curl -X POST "http://localhost:4567/ocr/image" \\
   -F "contrast=true"
 ```
 
-#### Example 2: Extract Text from a Multi-Page PDF using Python
-```python
-import requests
+#### Example 2: Submit a Full Book for Background OCR Task (`POST /api/tasks/book`)
+```bash
+# 1. Submit the book for background processing (with 1.0s rest time between pages)
+curl -X POST "http://localhost:4567/api/tasks/book" \\
+  -H "X-API-Key: YOUR_API_TOKEN" \\
+  -F "file=@book.pdf" \\
+  -F "model=gemma4" \\
+  -F "cooldown_seconds=1.0"
 
-url = "http://localhost:4567/ocr/pdf"
-headers = {
-    "X-API-Key": "YOUR_API_TOKEN"
-}
-data = {
-    "model": "gemma4",
-    "lang": "eng+ara+fas",
-    "start_page": 1,
-    "end_page": 5,
-    "use_llm": "true"
-}
+# 2. Check status of the last N tasks (e.g. N=5)
+curl -X GET "http://localhost:4567/api/tasks?n=5" \\
+  -H "X-API-Key: YOUR_API_TOKEN"
 
-with open("document.pdf", "rb") as f:
-    files = {"file": f}
-    response = requests.post(url, headers=headers, data=data, files=files)
-
-print(response.json())
+# 3. Download the OCRed book when completed (formats: txt, html, md, json, zip)
+curl -X GET "http://localhost:4567/api/tasks/TASK_ID/download?format=txt" \\
+  -H "X-API-Key: YOUR_API_TOKEN" -o book_ocr.txt
 ```
 
 ---
@@ -288,6 +288,7 @@ app.openapi = custom_openapi
 app.include_router(auth_router)
 app.include_router(admin_router, include_in_schema=False)
 app.include_router(user_router)
+app.include_router(tasks_router)
 
 # --- Browser Static & Favicon Routes ---
 
@@ -683,7 +684,8 @@ async def check_remote_services_status(response: Response):
             "llm": llm_res,
             "olm": olm_res
         },
-        "queue": queue_manager.get_metrics()
+        "queue": queue_manager.get_metrics(),
+        "book_tasks": task_manager.get_worker_metrics(),
     }
 
 @app.get(
@@ -692,11 +694,13 @@ async def check_remote_services_status(response: Response):
     summary="Check Real-Time Queue & Concurrency Telemetry"
 )
 def health_queue(response: Response):
-    """Returns real-time queue depth, active workers, GPU throttling, and lifetime metrics."""
+    """Returns real-time queue depth, active workers, GPU throttling, and background book task metrics."""
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-    return queue_manager.get_metrics()
+    metrics = queue_manager.get_metrics()
+    metrics["book_tasks"] = task_manager.get_worker_metrics()
+    return metrics
 
 @app.get(
     "/health/models",

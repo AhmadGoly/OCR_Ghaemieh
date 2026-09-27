@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Dict
+from typing import Dict, Optional
 from fastapi import Request, HTTPException, status
 from db.models import User
 import config
@@ -34,27 +34,28 @@ class OCRQueueManager:
     @asynccontextmanager
     async def acquire_slot(
         self,
-        request: Request,
-        user: User,
+        request: Optional[Request] = None,
+        user: Optional[User] = None,
         is_gpu_model: bool = False
     ):
         """
-        Safely acquires worker slots for an incoming OCR request with timeout and client liveness checks.
+        Safely acquires worker slots for an incoming OCR request or background task page.
         """
-        # 1. Early disconnect check
-        if await request.is_disconnected():
+        # 1. Early disconnect check (when bound to an interactive HTTP request)
+        if request is not None and await request.is_disconnected():
             raise HTTPException(
                 status_code=499,
                 detail="ارتباط با کلاینت پیش از شروع پردازش قطع گردید."
             )
 
-        # 2. Per-user active concurrency guard (exempt administrators)
+        # 2. Per-user active concurrency guard (exempt administrators and background task loops)
         max_user_slots = getattr(config, "MAX_USER_CONCURRENT_OCR", 4)
-        if not user.is_admin and self.user_active_jobs.get(user.id, 0) >= max_user_slots:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"تعداد پردازش‌های هم‌زمان شما به سقف مجاز ({max_user_slots}) رسیده است. لطفاً تا پایان پردازش‌های قبلی شکیبا باشید."
-            )
+        if request is not None and user is not None and not user.is_admin:
+            if self.user_active_jobs.get(user.id, 0) >= max_user_slots:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"تعداد پردازش‌های هم‌زمان شما به سقف مجاز ({max_user_slots}) رسیده است. لطفاً تا پایان پردازش‌های قبلی شکیبا باشید."
+                )
 
         queue_timeout = getattr(config, "QUEUE_TIMEOUT_SECONDS", 90.0)
         gpu_slot_acquired = False
@@ -87,7 +88,7 @@ class OCRQueueManager:
                     )
 
             # 5. Check if client disconnected while waiting in queue
-            if await request.is_disconnected():
+            if request is not None and await request.is_disconnected():
                 raise HTTPException(
                     status_code=499,
                     detail="درخواست توسط کاربر لغو گردید."
@@ -97,7 +98,8 @@ class OCRQueueManager:
             self.active_jobs += 1
             if is_gpu_model:
                 self.gpu_active_jobs += 1
-            self.user_active_jobs[user.id] = self.user_active_jobs.get(user.id, 0) + 1
+            if user is not None:
+                self.user_active_jobs[user.id] = self.user_active_jobs.get(user.id, 0) + 1
 
             try:
                 yield
@@ -109,7 +111,8 @@ class OCRQueueManager:
                 self.active_jobs = max(0, self.active_jobs - 1)
                 if is_gpu_model:
                     self.gpu_active_jobs = max(0, self.gpu_active_jobs - 1)
-                self.user_active_jobs[user.id] = max(0, self.user_active_jobs.get(user.id, 1) - 1)
+                if user is not None:
+                    self.user_active_jobs[user.id] = max(0, self.user_active_jobs.get(user.id, 1) - 1)
 
         finally:
             self.queued_jobs = max(0, self.queued_jobs - 1)

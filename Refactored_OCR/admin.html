@@ -60,7 +60,7 @@
                     <div>
                         <div class="flex items-center space-x-2 space-x-reverse">
                             <span class="text-sm font-black text-white">سامانه OCR قائمیه</span>
-                            <span class="text-[10px] uppercase font-bold tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full" x-text="'نسخه ' + (stats.version || '3.5.0')">نسخه 3.5.0</span>
+                            <span class="text-[10px] uppercase font-bold tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full" x-text="'نسخه ' + (stats.version || '3.6.0')">نسخه 3.6.0</span>
                         </div>
                         <p class="text-[11px] text-slate-400">پنل مدیریت کاربران و پایش سرویس‌ها</p>
                     </div>
@@ -264,6 +264,66 @@
                 </div>
             </div>
 
+            <!-- Background Book Tasks Monitoring (All Users) -->
+            <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl shadow-xl overflow-hidden">
+                <div class="p-5 border-b border-zinc-800 flex items-center justify-between">
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <i data-lucide="library" class="w-4 h-4 text-amber-400"></i>
+                        <h3 class="text-sm font-bold text-white">پایش وظایف پردازش کتاب تمامی کاربران (پس‌زمینه)</h3>
+                    </div>
+                    <span class="text-xs text-slate-400" x-text="bookTasks.length + ' وظیفه اخیر'"></span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-zinc-900/70 text-slate-400 border-b border-zinc-800">
+                            <tr>
+                                <th class="p-4 font-semibold">کاربر</th>
+                                <th class="p-4 font-semibold">نام فایل کتاب</th>
+                                <th class="p-4 font-semibold">مدل</th>
+                                <th class="p-4 font-semibold">وضعیت و پیشرفت</th>
+                                <th class="p-4 font-semibold">صفحات (موفق / خطا / کل)</th>
+                                <th class="p-4 font-semibold text-center">عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-800/60">
+                            <template x-if="bookTasks.length === 0">
+                                <tr>
+                                    <td colspan="6" class="p-6 text-center text-slate-500">هیچ وظیفه پردازش کتابی ثبت نشده است.</td>
+                                </tr>
+                            </template>
+                            <template x-for="t in bookTasks" :key="t.task_id">
+                                <tr class="hover:bg-zinc-900/40 transition">
+                                    <td class="p-4 font-bold text-white" x-text="t.username || ('کاربر #' + t.user_id)"></td>
+                                    <td class="p-4 text-slate-200 font-medium" x-text="t.filename"></td>
+                                    <td class="p-4 font-mono text-red-400" x-text="t.primary_model + (t.use_llm ? ' + LLM' : '')"></td>
+                                    <td class="p-4">
+                                        <div class="flex items-center space-x-2 space-x-reverse">
+                                            <span class="font-bold text-white" x-text="t.progress_percent + '%'"></span>
+                                            <span class="text-[11px] text-slate-400" x-text="'(' + t.status + ')'"></span>
+                                        </div>
+                                        <div class="w-32 h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1">
+                                            <div class="h-full bg-red-500 rounded-full" :style="'width:' + t.progress_percent + '%'"></div>
+                                        </div>
+                                    </td>
+                                    <td class="p-4 font-mono text-slate-300" x-text="t.completed_pages + ' / ' + t.failed_pages + ' / ' + t.total_pages"></td>
+                                    <td class="p-4 text-center">
+                                        <div class="inline-flex items-center space-x-1.5 space-x-reverse">
+                                            <template x-if="t.can_download">
+                                                <a :href="'/api/tasks/' + t.task_id + '/download?format=txt'" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-[11px] hover:bg-emerald-600/30 transition">دانلود TXT</a>
+                                            </template>
+                                            <template x-if="t.can_retry">
+                                                <button @click="retryAdminTask(t.task_id)" class="px-2.5 py-1 rounded-lg bg-amber-600/20 text-amber-300 border border-amber-500/30 text-[11px] hover:bg-amber-600/30 transition">تلاش مجدد</button>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Connected Engines Section -->
             <div class="bg-[#121215]/80 border border-zinc-800/80 rounded-2xl p-6 shadow-xl">
                 <h3 class="text-sm font-bold text-white mb-4 flex items-center space-x-2 space-x-reverse">
@@ -433,6 +493,7 @@
         function adminPortalApp() {
             return {
                 users: [],
+                bookTasks: [],
                 stats: {},
                 adminToken: '',
                 loading: false,
@@ -480,17 +541,33 @@
                 async refreshData() {
                     this.loading = true;
                     try {
-                        const [usersRes, statsRes] = await Promise.all([
+                        const [usersRes, statsRes, tasksRes] = await Promise.all([
                             fetch('/api/admin/users'),
-                            fetch('/api/admin/stats')
+                            fetch('/api/admin/stats'),
+                            fetch('/api/tasks?n=20&all_users=true')
                         ]);
                         if (usersRes.ok) this.users = await usersRes.json();
                         if (statsRes.ok) this.stats = await statsRes.json();
+                        if (tasksRes.ok) {
+                            const tData = await tasksRes.json();
+                            this.bookTasks = tData.tasks || [];
+                        }
                     } catch (e) {
                         console.error('Failed to load admin data:', e);
                     } finally {
                         this.loading = false;
                         this.$nextTick(() => lucide.createIcons());
+                    }
+                },
+
+                async retryAdminTask(taskId) {
+                    try {
+                        const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'خطا در تلاش مجدد');
+                        await this.refreshData();
+                    } catch (err) {
+                        alert('خطا: ' + err.message);
                     }
                 },
 

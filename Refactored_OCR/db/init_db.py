@@ -1,7 +1,7 @@
 import logging
 from sqlalchemy import select
 from .session import Base, engine, AsyncSessionLocal
-from .models import User, ApiKey
+from .models import User, ApiKey, ExtractionHistory, OCRBookTask, OCRBookTaskPage
 from core.security import hash_password, generate_raw_api_key
 import config
 
