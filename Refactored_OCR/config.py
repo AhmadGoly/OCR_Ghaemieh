@@ -2,7 +2,7 @@ import os
 
 from typing import Union, Sequence
 
-VERSION = "3.3.2"
+VERSION = "3.3.3"
 
 try:
     from dotenv import load_dotenv
@@ -13,13 +13,15 @@ try:
 except ImportError:
     pass
 
-# Database & Admin Authentication Configuration
+# Database & Authentication Configuration
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql+asyncpg://ocr_admin:ocr_secret_password@localhost:5432/ghaemieh_ocr_db"
 )
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+DEMO_USERNAME = os.environ.get("DEMO_USERNAME", "demo")
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "demo123")
 
 def get_bool_env(var_names: Union[str, Sequence[str]], default: bool) -> bool:
     """Read a boolean configuration value with support for multiple alias names."""

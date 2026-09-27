@@ -81,6 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <i data-lucide="user-check" class="w-3.5 h-3.5 text-emerald-400"></i>
           <span class="text-slate-400">کاربر:</span>
           <span class="font-bold text-white">${currentUser.username}</span>
+          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${currentUser.is_admin ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-zinc-800 text-slate-300 border border-zinc-700'}">${currentUser.is_admin ? 'مدیر' : 'عادی'}</span>
         </div>
         <button id="nav-token-btn" class="px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-300 hover:text-white text-xs font-semibold transition flex items-center space-x-1.5 space-x-reverse shadow-md shadow-red-950/20">
           <i data-lucide="key" class="w-3.5 h-3.5"></i>

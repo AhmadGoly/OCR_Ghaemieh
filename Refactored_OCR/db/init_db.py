@@ -9,10 +9,12 @@ logger = logging.getLogger("init_db")
 
 ADMIN_USERNAME = getattr(config, "ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = getattr(config, "ADMIN_PASSWORD", "admin123")
+DEMO_USERNAME = getattr(config, "DEMO_USERNAME", "demo")
+DEMO_PASSWORD = getattr(config, "DEMO_PASSWORD", "demo123")
 
 
 async def init_database() -> None:
-    """Creates database tables and provisions initial admin user and token if not present."""
+    """Creates database tables and provisions initial admin and demo users if not present."""
     logger.info("Initializing database schema...")
     try:
         async with engine.begin() as conn:
@@ -23,6 +25,7 @@ async def init_database() -> None:
 
     async with AsyncSessionLocal() as session:
         try:
+            # 1. Provision / Verify Admin User
             stmt = select(User).where(User.username == ADMIN_USERNAME)
             result = await session.execute(stmt)
             existing_admin = result.scalar_one_or_none()
@@ -58,7 +61,6 @@ async def init_database() -> None:
                 print(f"   API Key:  {raw_key}", flush=True)
                 print("-" * 68, flush=True)
             else:
-                # Ensure existing admin has an active ApiKey
                 key_stmt = select(ApiKey).where(ApiKey.user_id == existing_admin.id, ApiKey.is_active == True)
                 key_result = await session.execute(key_stmt)
                 admin_key = key_result.scalar_one_or_none()
@@ -74,8 +76,60 @@ async def init_database() -> None:
                     )
                     session.add(default_key)
                     await session.commit()
-                    print(f" [DB Provisioning] Active API Key assigned to existing Admin: {raw_key}", flush=True)
                 logger.info(f"Admin user '{ADMIN_USERNAME}' verified with active API key.")
+
+            # 2. Provision / Verify Demo (Standard) User
+            demo_stmt = select(User).where(User.username == DEMO_USERNAME)
+            demo_result = await session.execute(demo_stmt)
+            existing_demo = demo_result.scalar_one_or_none()
+
+            if not existing_demo:
+                logger.info(f"Provisioning default standard user '{DEMO_USERNAME}'...")
+                demo_user = User(
+                    username=DEMO_USERNAME,
+                    hashed_password=hash_password(DEMO_PASSWORD),
+                    is_admin=False,
+                    is_active=True,
+                    created_version=config.VERSION
+                )
+                session.add(demo_user)
+                await session.flush()
+
+                raw_key, key_prefix, key_hash = generate_raw_api_key()
+                demo_key = ApiKey(
+                    user_id=demo_user.id,
+                    name=f"Key for {DEMO_USERNAME}",
+                    key_prefix=key_prefix,
+                    secret_key=raw_key,
+                    key_hash=key_hash,
+                    is_active=True
+                )
+                session.add(demo_key)
+                await session.commit()
+
+                print("-" * 68, flush=True)
+                print(f" [DB Provisioning] Initial Demo User Created:", flush=True)
+                print(f"   Username: {DEMO_USERNAME}", flush=True)
+                print(f"   Password: {DEMO_PASSWORD}", flush=True)
+                print(f"   API Key:  {raw_key}", flush=True)
+                print("-" * 68, flush=True)
+            else:
+                demo_key_stmt = select(ApiKey).where(ApiKey.user_id == existing_demo.id, ApiKey.is_active == True)
+                demo_key_res = await session.execute(demo_key_stmt)
+                if not demo_key_res.scalar_one_or_none():
+                    raw_key, key_prefix, key_hash = generate_raw_api_key()
+                    d_key = ApiKey(
+                        user_id=existing_demo.id,
+                        name=f"Key for {DEMO_USERNAME}",
+                        key_prefix=key_prefix,
+                        secret_key=raw_key,
+                        key_hash=key_hash,
+                        is_active=True
+                    )
+                    session.add(d_key)
+                    await session.commit()
+                logger.info(f"Demo user '{DEMO_USERNAME}' verified with active API key.")
+
         except Exception as e:
             logger.error(f"Database seeding error: {e}")
             await session.rollback()
