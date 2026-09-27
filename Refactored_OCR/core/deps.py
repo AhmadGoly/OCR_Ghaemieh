@@ -106,6 +106,45 @@ async def get_current_user(
                     )
                 return user
 
+    # 4. Check query parameters (e.g. ?api_key=... or ?token=...)
+    query_token = request.query_params.get("api_key") or request.query_params.get("token")
+    if query_token:
+        query_token = query_token.strip()
+        if query_token.startswith("sk-gh-"):
+            key_hash = hashlib.sha256(query_token.encode("utf-8")).hexdigest()
+            stmt = (
+                select(ApiKey)
+                .options(selectinload(ApiKey.user))
+                .where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
+            )
+            result = await db.execute(stmt)
+            key_obj = result.scalar_one_or_none()
+            if key_obj and key_obj.user:
+                if not key_obj.user.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="حساب کاربری متصل به این کلید غیرفعال است."
+                    )
+                return key_obj.user
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="کلید API نامعتبر است یا منقضی شده است."
+                )
+        else:
+            payload = decode_access_token(query_token)
+            if payload and "sub" in payload:
+                stmt = select(User).where(User.username == payload["sub"])
+                result = await db.execute(stmt)
+                user = result.scalar_one_or_none()
+                if user:
+                    if not user.is_active:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="این حساب کاربری غیرفعال شده است."
+                        )
+                    return user
+
     # No valid authentication provided
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -135,3 +174,43 @@ async def require_admin(
             detail="دسترسی به این بخش نیازمند دسترسی مدیریت (Admin) است."
         )
     return current_user
+
+
+async def check_docs_access(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+) -> User:
+    """
+    Guards API documentation (/docs, /redoc, /openapi.json).
+    Requires active authentication, and restricts to administrator accounts if configured.
+    For browser navigation without credentials, redirects to the login screen.
+    """
+    import config
+    from fastapi.responses import RedirectResponse
+
+    user = None
+    try:
+        user = await get_current_user(request=request, db=db)
+    except HTTPException:
+        pass
+
+    if not user:
+        accept_header = request.headers.get("accept", "")
+        # If browser navigated to HTML docs without login, redirect to login page
+        if "text/html" in accept_header and not request.url.path.endswith(".json"):
+            return RedirectResponse(
+                url=f"/login?next={request.url.path}",
+                status_code=status.HTTP_307_TEMPORARY_REDIRECT
+            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="مشاهده مستندات فنی API نیازمند احراز هویت با توکن معتبر است."
+        )
+
+    if getattr(config, "DOCS_REQUIRE_ADMIN", True) and not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="دسترسی به مستندات و شمای OpenAPI فقط برای مدیران سامانه (Admin) مجاز است."
+        )
+
+    return user

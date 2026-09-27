@@ -2,7 +2,7 @@ import os
 
 from typing import Union, Sequence
 
-VERSION = "3.4.0"
+VERSION = "3.5.0"
 
 try:
     from dotenv import load_dotenv
@@ -37,6 +37,13 @@ def get_bool_env(var_names: Union[str, Sequence[str]], default: bool) -> bool:
 MAX_CONCURRENT_OCR = int(os.environ.get("MAX_CONCURRENT_OCR", 20))
 OCR_THREAD_WORKERS = int(os.environ.get("OCR_THREAD_WORKERS", 24))
 PDF_PAGE_WORKERS = int(os.environ.get("PDF_PAGE_WORKERS", 4))
+LOCAL_GPU_CONCURRENCY_LIMIT = int(os.environ.get("LOCAL_GPU_CONCURRENCY_LIMIT", 2))
+MAX_USER_CONCURRENT_OCR = int(os.environ.get("MAX_USER_CONCURRENT_OCR", 4))
+QUEUE_TIMEOUT_SECONDS = float(os.environ.get("QUEUE_TIMEOUT_SECONDS", 90.0))
+
+# API Documentation & Schema Security
+DOCS_REQUIRE_AUTH = get_bool_env(["DOCS_REQUIRE_AUTH"], True)
+DOCS_REQUIRE_ADMIN = get_bool_env(["DOCS_REQUIRE_ADMIN"], True)
 
 # OCR Model Loading Configuration (supports aliases like LOAD_OLMOCR or OLMOCR)
 LOAD_TESSERACT = get_bool_env(["LOAD_TESSERACT", "TESSERACT"], True)
@@ -155,6 +162,18 @@ def get_config_dict() -> dict:
             "timeout_seconds": HEALTH_CHECK_TIMEOUT,
             "llm_health_url": get_llm_health_url(),
             "olm_health_url": get_olm_health_url(),
+        },
+        "concurrency": {
+            "max_concurrent_ocr": MAX_CONCURRENT_OCR,
+            "ocr_thread_workers": OCR_THREAD_WORKERS,
+            "pdf_page_workers": PDF_PAGE_WORKERS,
+            "local_gpu_concurrency_limit": LOCAL_GPU_CONCURRENCY_LIMIT,
+            "max_user_concurrent_ocr": MAX_USER_CONCURRENT_OCR,
+            "queue_timeout_seconds": QUEUE_TIMEOUT_SECONDS,
+        },
+        "docs_security": {
+            "require_auth": DOCS_REQUIRE_AUTH,
+            "require_admin": DOCS_REQUIRE_ADMIN,
         },
         "defaults": {
             "model": DEFAULT_MODEL,

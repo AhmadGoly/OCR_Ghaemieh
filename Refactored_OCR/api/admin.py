@@ -184,9 +184,11 @@ async def delete_user(user_id: int, current_user: User = Depends(require_admin),
     return {"status": "success", "message": f"کاربر '{user.username}' با موفقیت حذف شد."}
 
 
+from services.queue_manager import queue_manager
+
 @router.get("/stats")
 async def get_system_stats(db: AsyncSession = Depends(get_db)):
-    """Returns system-wide metrics and engine status."""
+    """Returns system-wide metrics, active queue depth, and engine status."""
     total_users_stmt = select(func.count(User.id))
     total_users = (await db.execute(total_users_stmt)).scalar() or 0
 
@@ -197,5 +199,6 @@ async def get_system_stats(db: AsyncSession = Depends(get_db)):
         "version": config.VERSION,
         "total_users": total_users,
         "total_extractions": total_extractions,
+        "queue": queue_manager.get_metrics(),
         "runtime_config": config.get_config_dict()
     }

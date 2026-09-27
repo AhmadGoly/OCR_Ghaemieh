@@ -17,8 +17,9 @@ import socket
 import urllib.request
 import urllib.error
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request, Response
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request, Response, status
+from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
 from PIL import Image
@@ -36,6 +37,7 @@ from models.olm import OlmOCRModel
 from models.gemma import GemmaVLMModel
 from services.merger import LLMMerger
 from services.ocr_service import OCRService
+from services.queue_manager import queue_manager
 
 from db.init_db import init_database
 from db.session import get_db
@@ -43,7 +45,7 @@ from db.models import User, ExtractionHistory
 from api.auth import router as auth_router
 from api.admin import router as admin_router
 from api.user import router as user_router
-from core.deps import get_current_user, get_current_user_optional
+from core.deps import get_current_user, get_current_user_optional, check_docs_access, require_admin
 from core.security import decode_access_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -183,8 +185,9 @@ app = FastAPI(
     lifespan=lifespan,
     title="Ghaemieh Intelligent OCR API",
     version=config.VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # Custom OpenAPI Schema with Token Auth & User-Centric Documentation
@@ -329,6 +332,46 @@ async def read_style():
 async def read_script():
     return FileResponse(os.path.join(BASE_DIR, 'script.js'))
 
+# --- Secure API Documentation Endpoints (Protected by Token / Admin Auth) ---
+
+@app.get("/docs", include_in_schema=False)
+async def get_swagger_documentation(request: Request, db: AsyncSession = Depends(get_db)):
+    """Interactive Swagger UI - Protected by authentication & admin verification."""
+    auth_res = await check_docs_access(request, db)
+    if isinstance(auth_res, RedirectResponse):
+        return auth_res
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title=app.title + " - API Documentation",
+        swagger_favicon_url="/favicon.ico",
+        swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui.css",
+    )
+
+@app.get("/redoc", include_in_schema=False)
+async def get_redoc_documentation(request: Request, db: AsyncSession = Depends(get_db)):
+    """ReDoc API Documentation - Protected by authentication & admin verification."""
+    auth_res = await check_docs_access(request, db)
+    if isinstance(auth_res, RedirectResponse):
+        return auth_res
+    return get_redoc_html(
+        openapi_url="/openapi.json",
+        title=app.title + " - ReDoc Specification",
+        redoc_favicon_url="/favicon.ico",
+        redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js",
+    )
+
+@app.get("/openapi.json", include_in_schema=False)
+async def get_openapi_specification(request: Request, db: AsyncSession = Depends(get_db)):
+    """Raw OpenAPI 3.0 JSON Schema - Strictly protected by authentication."""
+    auth_res = await check_docs_access(request, db)
+    if isinstance(auth_res, RedirectResponse):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="مشاهده شمای OpenAPI نیازمند احراز هویت با توکن معتبر است."
+        )
+    return JSONResponse(app.openapi())
+
 # --- Main OCR Processing Endpoints (Thread-Pool Offloaded for High Concurrency) ---
 
 @app.post(
@@ -338,6 +381,7 @@ async def read_script():
     summary="Extract Text from Image"
 )
 async def ocr_image(
+    request: Request,
     file: UploadFile = File(..., description="Document image file (JPG, PNG, TIFF, etc.)"),
     lang: str = Form(config.DEFAULT_LANG, description="Document language codes (e.g. eng+ara+fas)"),
     model: ModelName = Form(config.DEFAULT_MODEL, description="Primary AI vision/OCR model"),
@@ -364,12 +408,14 @@ async def ocr_image(
     if secondary_model_name and secondary_model_name not in ocr_service.models:
         raise HTTPException(status_code=400, detail=f"Secondary model '{secondary_model.value if isinstance(secondary_model, Enum) else secondary_model}' is not active on this server.")
 
+    is_gpu = primary_model_name in ("qwen", "varco") or (secondary_model_name in ("qwen", "varco") if secondary_model_name else False)
+
     image_data = await file.read()
     image = Image.open(io.BytesIO(image_data))
     image.load()
 
     try:
-        async with ocr_semaphore:
+        async with queue_manager.acquire_slot(request=request, user=current_user, is_gpu_model=is_gpu):
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 ocr_executor,
@@ -415,6 +461,7 @@ async def ocr_image(
     summary="Extract Text from PDF Document"
 )
 async def ocr_pdf(
+    request: Request,
     file: UploadFile = File(..., description="PDF document file"),
     lang: str = Form(config.DEFAULT_LANG, description="Document language codes (e.g. eng+ara+fas)"),
     model: ModelName = Form(config.DEFAULT_MODEL, description="Primary AI vision/OCR model"),
@@ -443,12 +490,14 @@ async def ocr_pdf(
     if secondary_model_name and secondary_model_name not in ocr_service.models:
         raise HTTPException(status_code=400, detail=f"Secondary model '{secondary_model.value if isinstance(secondary_model, Enum) else secondary_model}' is not active on this server.")
 
+    is_gpu = primary_model_name in ("qwen", "varco") or (secondary_model_name in ("qwen", "varco") if secondary_model_name else False)
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(await file.read())
         pdf_path = tmp_file.name
 
     try:
-        async with ocr_semaphore:
+        async with queue_manager.acquire_slot(request=request, user=current_user, is_gpu_model=is_gpu):
             loop = asyncio.get_running_loop()
             results = await loop.run_in_executor(
                 ocr_executor,
@@ -633,8 +682,21 @@ async def check_remote_services_status(response: Response):
         "services": {
             "llm": llm_res,
             "olm": olm_res
-        }
+        },
+        "queue": queue_manager.get_metrics()
     }
+
+@app.get(
+    "/health/queue",
+    tags=["System Health"],
+    summary="Check Real-Time Queue & Concurrency Telemetry"
+)
+def health_queue(response: Response):
+    """Returns real-time queue depth, active workers, GPU throttling, and lifetime metrics."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return queue_manager.get_metrics()
 
 @app.get(
     "/health/models",
