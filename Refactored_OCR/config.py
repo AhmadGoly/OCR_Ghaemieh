@@ -2,7 +2,7 @@ import os
 
 from typing import Union, Sequence
 
-VERSION = "3.6.5"
+VERSION = "3.7.0"
 
 try:
     from dotenv import load_dotenv
@@ -119,7 +119,7 @@ ACCEPTED_LANGUAGES = ["eng", "ara", "fas"]
 DEFAULT_LANG = os.environ.get("DEFAULT_LANG", "eng+ara+fas")
 DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "tesseract")
 DEFAULT_PREPROCESS = get_bool_env(["DEFAULT_PREPROCESS", "PREPROCESS"], False)
-DEFAULT_CONTRAST = get_bool_env(["DEFAULT_CONTRAST", "CONTRAST"], False)
+DEFAULT_CONTRAST = get_bool_env(["DEFAULT_CONTRAST", "CONTRAST"], True)
 DEFAULT_SCALE = float(os.environ.get("DEFAULT_SCALE", 1.0))
 DEFAULT_USE_LLM = get_bool_env(["DEFAULT_USE_LLM", "USE_LLM"], False)
 DEFAULT_LLM_URL = os.environ.get("DEFAULT_LLM_URL", "http://10.0.38.50:50015/v1")

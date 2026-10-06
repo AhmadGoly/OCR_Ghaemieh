@@ -16,6 +16,9 @@ import json
 import socket
 import urllib.request
 import urllib.error
+import logging
+import traceback
+import uuid
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Request, Response, status
 from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
@@ -195,6 +198,76 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+logger = logging.getLogger("ghaemieh_ocr")
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Standardized HTTP error handler with classified error codes (e.g. ERR-502-CONN, ERR-400-MDL)
+    and detailed server-side logging.
+    """
+    status_code = exc.status_code
+    detail = exc.detail
+
+    # Generate or reuse error tracking code
+    rand_suffix = uuid.uuid4().hex[:4].upper()
+    detail_lower = str(detail).lower()
+
+    if status_code == 502 or "connection refused" in detail_lower or "connect" in detail_lower:
+        error_code = f"ERR-502-CONN-{rand_suffix}"
+    elif status_code == 504 or "timeout" in detail_lower or "timed out" in detail_lower:
+        error_code = f"ERR-504-TO-{rand_suffix}"
+    elif status_code == 503 or "cuda" in detail_lower or "out of memory" in detail_lower:
+        error_code = f"ERR-503-MEM-{rand_suffix}"
+    elif status_code == 400 and ("model" in detail_lower or "not active" in detail_lower):
+        error_code = f"ERR-400-MDL-{rand_suffix}"
+    elif status_code == 401:
+        error_code = "ERR-401"
+    elif status_code == 403:
+        error_code = "ERR-403"
+    elif status_code == 413:
+        error_code = "ERR-413"
+    else:
+        error_code = f"ERR-{status_code}-{rand_suffix}"
+
+    logger.warning(
+        f"[{error_code}] HTTP {status_code} on {request.method} {request.url.path}: {detail}"
+    )
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error_code": error_code,
+            "detail": detail,
+            "status": status_code,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    )
+
+@app.exception_handler(Exception)
+async def global_unhandled_exception_handler(request: Request, exc: Exception):
+    """
+    Catches all unhandled 500 exceptions, logs the full stack trace with a unique trace ID,
+    and returns a structured JSON payload with error_code: ERR-500-XXXX.
+    """
+    trace_id = uuid.uuid4().hex[:4].upper()
+    error_code = f"ERR-500-{trace_id}"
+    full_trace = traceback.format_exc()
+
+    logger.error(
+        f"[{error_code}] Unhandled internal exception on {request.method} {request.url.path}:\n{full_trace}"
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error_code": error_code,
+            "detail": f"خطای داخلی در پردازش درخواست: {str(exc)}",
+            "status": 500,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    )
 
 # Custom OpenAPI Schema with Token Auth & User-Centric Documentation
 API_DOCUMENTATION_MARKDOWN = """
@@ -455,8 +528,22 @@ async def ocr_image(
             pass
 
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        err_msg = str(e)
+        err_lower = err_msg.lower()
+        if "connection refused" in err_lower or "connect" in err_lower or "failed to establish a new connection" in err_lower:
+            raise HTTPException(
+                status_code=502,
+                detail=f"ارتباط با موتور هوش مصنوعی برقرار نشد (Connection Refused): {err_msg}"
+            )
+        if "timeout" in err_lower or "timed out" in err_lower:
+            raise HTTPException(
+                status_code=504,
+                detail=f"مهلت پاسخ‌دهی موتور هوش مصنوعی به پایان رسید (Gateway Timeout): {err_msg}"
+            )
+        raise e
 
 @app.post(
     "/ocr/pdf",
@@ -543,8 +630,22 @@ async def ocr_pdf(
             pass
 
         return results
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        err_msg = str(e)
+        err_lower = err_msg.lower()
+        if "connection refused" in err_lower or "connect" in err_lower or "failed to establish a new connection" in err_lower:
+            raise HTTPException(
+                status_code=502,
+                detail=f"ارتباط با موتور هوش مصنوعی برقرار نشد (Connection Refused): {err_msg}"
+            )
+        if "timeout" in err_lower or "timed out" in err_lower:
+            raise HTTPException(
+                status_code=504,
+                detail=f"مهلت پاسخ‌دهی موتور هوش مصنوعی به پایان رسید (Gateway Timeout): {err_msg}"
+            )
+        raise e
     finally:
         if os.path.exists(pdf_path):
             os.unlink(pdf_path)
@@ -752,6 +853,44 @@ def health_config(response: Response):
     response.headers["Expires"] = "0"
 
     return config.get_config_dict()
+
+@app.get(
+    "/health/ping",
+    tags=["System Health"],
+    summary="Active Health Ping for All AI Backend Models & Merger"
+)
+async def health_ping(response: Response):
+    """
+    Actively pings each loaded OCR model and LLM merger backend.
+    Returns live connectivity, latency in milliseconds, and individual backend status.
+    """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    results = {}
+    if ocr_service and ocr_service.models:
+        for model_name, model_inst in ocr_service.models.items():
+            if hasattr(model_inst, "ping"):
+                try:
+                    results[model_name] = await asyncio.to_thread(model_inst.ping)
+                except Exception as e:
+                    results[model_name] = {"status": "error", "error": str(e)}
+            else:
+                results[model_name] = {"status": "online", "type": "local"}
+
+    if ocr_service and ocr_service.merger and hasattr(ocr_service.merger, "ping"):
+        try:
+            results["llm_merger"] = await asyncio.to_thread(ocr_service.merger.ping)
+        except Exception as e:
+            results["llm_merger"] = {"status": "error", "error": str(e)}
+
+    all_online = all(v.get("status") in ("online", "ok") for v in results.values()) if results else False
+    return {
+        "status": "healthy" if all_online else "degraded",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "backends": results
+    }
 
 if __name__ == "__main__":
     import uvicorn

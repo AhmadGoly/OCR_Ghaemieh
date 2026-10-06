@@ -61,7 +61,7 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۶.۵</span>
+                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۷.۰</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
@@ -208,12 +208,12 @@
                     <label class="font-semibold text-slate-300">بهینه‌سازی و فیلترهای تصویر:</label>
                     <div class="flex flex-wrap gap-3 pt-1">
                         <label class="inline-flex items-center space-x-1.5 space-x-reverse cursor-pointer">
-                            <input type="checkbox" id="preprocess-toggle" checked class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
-                            <span class="text-xs text-slate-300">خاکستری</span>
+                            <input type="checkbox" id="preprocess-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
+                            <span class="text-xs text-slate-300">خاکستری و فیلتر تیزسازی (Sharpen)</span>
                         </label>
                         <label class="inline-flex items-center space-x-1.5 space-x-reverse cursor-pointer">
-                            <input type="checkbox" id="contrast-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
-                            <span class="text-xs text-slate-300">کنتراست (CLAHE)</span>
+                            <input type="checkbox" id="contrast-toggle" checked class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
+                            <span class="text-xs text-slate-300">کنتراست هوشمند (CLAHE)</span>
                         </label>
                         <label class="inline-flex items-center space-x-1.5 space-x-reverse cursor-pointer">
                             <input type="checkbox" id="crop-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">

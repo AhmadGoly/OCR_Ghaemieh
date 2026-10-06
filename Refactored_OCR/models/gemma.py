@@ -59,3 +59,46 @@ class GemmaVLMModel(BaseOCRModel):
         )
 
         return response.choices[0].message.content or ""
+
+    def ping(self) -> dict:
+        """Probe remote Gemma 4 VLM OpenAI-compatible API endpoint health."""
+        import urllib.request
+        import urllib.error
+        import time
+
+        url = f"{self.base_url.rstrip('/')}/models"
+        start_t = time.perf_counter()
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "User-Agent": "Ghaemieh-OCR-Probe/1.0"
+            }
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                elapsed = round((time.perf_counter() - start_t) * 1000, 2)
+                return {
+                    "status": "online",
+                    "status_code": resp.getcode(),
+                    "response_time_ms": elapsed,
+                    "model_name": self.model_name
+                }
+        except urllib.error.HTTPError as e:
+            elapsed = round((time.perf_counter() - start_t) * 1000, 2)
+            is_reachable = e.code in (200, 401, 403, 404, 405)
+            return {
+                "status": "online" if is_reachable else "error",
+                "status_code": e.code,
+                "response_time_ms": elapsed,
+                "error": f"HTTP {e.code}: {e.reason}",
+                "model_name": self.model_name
+            }
+        except Exception as e:
+            elapsed = round((time.perf_counter() - start_t) * 1000, 2)
+            return {
+                "status": "offline",
+                "response_time_ms": elapsed,
+                "error": str(e),
+                "model_name": self.model_name
+            }

@@ -581,9 +581,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!response.ok) {
         let errorDetail = "خطا در پردازش فایل";
+        let serverErrorCode = "";
         try {
           const errorData = await response.json();
           errorDetail = errorData.detail || errorDetail;
+          serverErrorCode = errorData.error_code || "";
         } catch (_) {
           try {
             errorDetail = await response.text();
@@ -591,7 +593,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         showErrorModal({
           status: response.status,
-          rawDetail: errorDetail
+          rawDetail: errorDetail,
+          errorCode: serverErrorCode
         });
         return;
       }

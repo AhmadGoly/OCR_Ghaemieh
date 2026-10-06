@@ -7,7 +7,12 @@ class BaseOCRModel(ABC):
         """
         Processes the given image and returns the extracted text.
         """
-        pass
+    def ping(self) -> dict:
+        """
+        Health probe check for the backend model.
+        Returns a dict with 'status': 'online', 'error': None, or detailed issue.
+        """
+        return {"status": "online", "type": "local"}
 
     def __repr__(self):
         return f"{self.__class__.__name__}()"
