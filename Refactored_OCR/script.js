@@ -369,6 +369,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Global Clipboard Paste Listener (Ctrl+V) for Screenshots
+  window.addEventListener("paste", (e) => {
+    const items = (e.clipboardData || window.clipboardData)?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          const ext = item.type.split("/")[1] || "png";
+          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+          const pastedFile = new File([file], `screenshot_${timestamp}.${ext}`, { type: item.type });
+
+          handleFileSelected(pastedFile);
+
+          if (fileNameDisplay) {
+            fileNameDisplay.textContent = `اسکرین‌شات الصاق‌شده (${pastedFile.name})`;
+          }
+
+          if (uploadArea) {
+            uploadArea.classList.add("border-emerald-500", "bg-emerald-950/20");
+            setTimeout(() => {
+              uploadArea.classList.remove("border-emerald-500", "bg-emerald-950/20");
+            }, 1500);
+          }
+          break;
+        }
+      }
+    }
+  });
+
   function handleFileSelected(file) {
     selectedFile = file;
     fileNameDisplay.textContent = file.name;
@@ -541,18 +574,199 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Download result text
-  downloadButton.addEventListener("click", () => {
-    const blob = new Blob([ocrOutput.value], { type: "text/plain;charset=utf-8" });
+  // Multi-Format Export Handler for Active Result (TXT, MD, HTML, JSON)
+  const exportDropdownBtn = document.getElementById("export-dropdown-btn");
+  const exportDropdownMenu = document.getElementById("export-dropdown-menu");
+  const exportDropdownChevron = document.getElementById("export-dropdown-chevron");
+  const exportFormatButtons = document.querySelectorAll(".export-format-opt");
+
+  function closeExportDropdown() {
+    if (exportDropdownMenu) {
+      exportDropdownMenu.classList.add("hidden");
+    }
+    if (exportDropdownChevron) {
+      exportDropdownChevron.classList.remove("rotate-180");
+    }
+  }
+
+  function toggleExportDropdown() {
+    if (!exportDropdownMenu) return;
+    const isHidden = exportDropdownMenu.classList.contains("hidden");
+    if (isHidden) {
+      exportDropdownMenu.classList.remove("hidden");
+      if (exportDropdownChevron) exportDropdownChevron.classList.add("rotate-180");
+    } else {
+      closeExportDropdown();
+    }
+  }
+
+  if (exportDropdownBtn) {
+    exportDropdownBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleExportDropdown();
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (exportDropdownMenu && !exportDropdownMenu.contains(e.target) && e.target !== exportDropdownBtn) {
+      closeExportDropdown();
+    }
+  });
+
+  function triggerDownloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ocr_result_${Date.now()}.txt`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  function exportActiveResult(format) {
+    const text = ocrOutput ? ocrOutput.value : "";
+    if (!text || !text.trim()) {
+      alert("متنی برای دانلود وجود ندارد. لطفاً ابتدا سند یا تصویری را جهت استخراج ارسال فرمایید.");
+      return;
+    }
+
+    const rawBase = selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, "") : "ocr_result";
+    const safeBase = rawBase.replace(/[^a-zA-Z0-9_\u0600-\u06FF\s-]/g, "_").trim() || "ocr_result";
+    const timestamp = Date.now();
+    const modelName = (resultModelBadge ? resultModelBadge.textContent : "") || "OCR Engine";
+    const ocrTime = (resultOcrDuration ? resultOcrDuration.textContent : "") || "--";
+    const llmTime = (resultLlmDuration && !resultLlmContainer?.hidden ? resultLlmDuration.textContent : "") || "";
+
+    if (format === "txt") {
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      triggerDownloadBlob(blob, `${safeBase}_${timestamp}.txt`);
+    } else if (format === "md") {
+      const mdContent = [
+        `# خروجی استخراج متن قائمیه: ${safeBase}`,
+        "",
+        `- **نام سند**: \`${selectedFile ? selectedFile.name : safeBase}\``,
+        `- **موتور استخراج متن**: \`${modelName}\`` + (llmTime ? ` + LLM (${llmTime})` : ""),
+        `- **مدت زمان OCR**: \`${ocrTime}\``,
+        `- **تاریخ استخراج**: \`${new Date().toLocaleString("fa-IR")}\``,
+        `- **تعداد کاراکترها**: \`${text.length}\``,
+        "",
+        "---",
+        "",
+        text,
+        ""
+      ].join("\n");
+      const blob = new Blob([mdContent], { type: "text/markdown;charset=utf-8" });
+      triggerDownloadBlob(blob, `${safeBase}_${timestamp}.md`);
+    } else if (format === "html") {
+      const escapedText = escapeHtml(text).replace(/\n/g, "<br>\n");
+      const htmlDoc = `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(safeBase)} - خروجی OCR قائمیه</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+            background: #f8fafc;
+            color: #0f172a;
+            margin: 0;
+            padding: 32px 20px;
+            line-height: 2.2;
+            direction: rtl;
+        }
+        .container {
+            max-width: 840px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            padding: 36px 44px;
+            border: 1px solid #e2e8f0;
+        }
+        .header {
+            border-bottom: 2px solid #e11d48;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+        .header h1 {
+            font-size: 20px;
+            color: #be123c;
+            margin: 0 0 10px 0;
+        }
+        .meta {
+            font-size: 12px;
+            color: #64748b;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .meta strong { color: #334155; }
+        .content {
+            font-size: 15px;
+            color: #1e293b;
+            text-align: justify;
+            white-space: normal;
+            line-height: 2.3;
+        }
+        @media print {
+            body { background: #fff; padding: 0; }
+            .container { box-shadow: none; border: none; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>${escapeHtml(selectedFile ? selectedFile.name : safeBase)}</h1>
+            <div class="meta">
+                <span>موتور OCR: <strong>${escapeHtml(modelName)}</strong></span>
+                <span>زمان پردازش: <strong>${escapeHtml(ocrTime)}</strong></span>
+                <span>تعداد کاراکتر: <strong>${text.length}</strong></span>
+                <span>تاریخ: <strong>${new Date().toLocaleString("fa-IR")}</strong></span>
+            </div>
+        </div>
+        <div class="content">
+            ${escapedText}
+        </div>
+    </div>
+</body>
+</html>`;
+      const blob = new Blob([htmlDoc], { type: "text/html;charset=utf-8" });
+      triggerDownloadBlob(blob, `${safeBase}_${timestamp}.html`);
+    } else if (format === "json") {
+      const payload = {
+        document_name: selectedFile ? selectedFile.name : safeBase,
+        extracted_at: new Date().toISOString(),
+        primary_model: modelName,
+        ocr_duration: ocrTime,
+        llm_duration: llmTime,
+        character_count: text.length,
+        word_count: text.trim().split(/\s+/).length,
+        text: text
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+      triggerDownloadBlob(blob, `${safeBase}_${timestamp}.json`);
+    }
+  }
+
+  exportFormatButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const fmt = btn.getAttribute("data-export-format") || "txt";
+      exportActiveResult(fmt);
+      closeExportDropdown();
+    });
   });
+
+  if (downloadButton) {
+    downloadButton.addEventListener("click", () => {
+      exportActiveResult("txt");
+    });
+  }
 
   // Synchronize model availability and disable inactive models in select menus
   async function syncModelAvailability() {

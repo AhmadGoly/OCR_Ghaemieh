@@ -340,9 +340,10 @@ async def download_task_book(
 
     content_bytes, media_type, download_filename = task_manager.build_export_payload(task, format.lower())
     encoded_filename = urllib.parse.quote(download_filename)
+    ascii_fallback = "".join(c if c.isascii() and c not in ('"', '\\', '\r', '\n') else "_" for c in download_filename).strip("_") or f"book_export.{format}"
 
     headers = {
-        "Content-Disposition": f"attachment; filename=\"{ encoded_filename }\"; filename*=UTF-8''{ encoded_filename }",
+        "Content-Disposition": f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded_filename}',
         "Cache-Control": "no-cache",
     }
     return Response(content=content_bytes, media_type=media_type, headers=headers)

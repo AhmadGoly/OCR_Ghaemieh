@@ -517,7 +517,8 @@ class BookTaskManager:
                 lines.append(f"## صفحه {p.page_number}")
                 lines.append("")
                 if p.status == "completed":
-                    lines.append(p.extracted_text or "")
+                    page_text = (p.extracted_text or "").strip()
+                    lines.append(page_text if page_text else "*(متنی در این صفحه تشخیص داده نشد)*")
                 elif p.status == "failed":
                     lines.append(f"> **[خطا در استخراج صفحه {p.page_number}]** — {p.last_error or 'ناموفق'}")
                 else:
@@ -532,8 +533,12 @@ class BookTaskManager:
             page_blocks = []
             for p in sorted_pages:
                 if p.status == "completed":
-                    escaped_txt = html.escape(p.extracted_text or "").replace("\n", "<br>\n")
-                    body_html = f'<div class="page-text">{escaped_txt}</div>'
+                    page_text = (p.extracted_text or "").strip()
+                    if page_text:
+                        escaped_txt = html.escape(page_text).replace("\n", "<br>\n")
+                        body_html = f'<div class="page-text">{escaped_txt}</div>'
+                    else:
+                        body_html = '<div class="page-error" style="background:#f1f5f9;color:#64748b;">متنی در این صفحه تشخیص داده نشد.</div>'
                 elif p.status == "failed":
                     body_html = f'<div class="page-error">خطا در استخراج صفحه {p.page_number}: {html.escape(p.last_error or "")}</div>'
                 else:
@@ -618,7 +623,8 @@ class BookTaskManager:
         for p in sorted_pages:
             header = f"--- صفحه {p.page_number} ---"
             if p.status == "completed":
-                txt_blocks.append(f"{header}\n{p.extracted_text or ''}\n")
+                page_text = (p.extracted_text or "").strip()
+                txt_blocks.append(f"{header}\n{page_text if page_text else '[متنی در این صفحه تشخیص داده نشد]'}\n")
             elif p.status == "failed":
                 txt_blocks.append(f"{header}\n[خطا در استخراج این صفحه: {p.last_error or 'ناموفق'}]\n")
             else:
