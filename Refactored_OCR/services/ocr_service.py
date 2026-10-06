@@ -4,6 +4,7 @@ from PIL import Image
 from models.base import BaseOCRModel
 from utils.image_processing import ImageProcessor
 from utils.pdf_utils import PDFUtils
+from utils.text_processing import TextProcessor
 from .merger import LLMMerger
 
 class OCRService:
@@ -54,7 +55,7 @@ class OCRService:
         text1 = primary_model.process(processed_image, lang)
         ocr_duration = time.time() - start_t
 
-        final_text = text1
+        final_text = TextProcessor.reflow_paragraphs(text1) if not use_llm else text1
         llm_duration = -1
 
         ocr_outputs = [text1]

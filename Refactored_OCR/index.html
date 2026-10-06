@@ -61,7 +61,7 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۶.۴</span>
+                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۶.۵</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
@@ -88,7 +88,12 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-slate-300 font-semibold">توکن اختصاصی شما:</span>
-                        <code id="banner-token-display" class="font-mono text-red-400 font-bold bg-zinc-900/90 px-2.5 py-0.5 rounded-lg border border-zinc-700/80">در حال دریافت...</code>
+                        <div class="inline-flex items-center gap-1.5 bg-zinc-900/90 px-2.5 py-0.5 rounded-lg border border-zinc-700/80">
+                            <code id="banner-token-display" class="font-mono text-red-400 font-bold select-all">در حال دریافت...</code>
+                            <button type="button" id="banner-toggle-token-btn" title="نمایش / مخفی‌سازی توکن" class="text-slate-400 hover:text-slate-200 transition p-0.5">
+                                <i id="banner-token-eye-icon" data-lucide="eye" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
                     </div>
                     <p class="text-[11px] text-slate-400 mt-0.5">تمامی درخواست‌های استخراج متن از طریق این توکن معتبرسازی می‌شوند.</p>
                 </div>
@@ -509,7 +514,10 @@
             <div class="space-y-2">
                 <label class="block text-xs font-semibold text-slate-300">کلید API فعال شما (Secret Key):</label>
                 <div class="flex items-center space-x-2 space-x-reverse bg-zinc-900 border border-zinc-700 rounded-xl p-2">
-                    <input type="text" id="modal-token-input" readonly class="font-mono text-red-400 bg-transparent flex-1 text-xs outline-none px-2 select-all" />
+                    <input type="password" id="modal-token-input" readonly class="font-mono text-red-400 bg-transparent flex-1 text-xs outline-none px-2 select-all" />
+                    <button type="button" id="modal-toggle-token-btn" title="نمایش / مخفی‌سازی توکن" class="text-slate-400 hover:text-slate-200 transition p-1.5 rounded-lg hover:bg-zinc-800 shrink-0">
+                        <i id="modal-token-eye-icon" data-lucide="eye" class="w-4 h-4"></i>
+                    </button>
                     <button type="button" id="modal-copy-token-btn" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center space-x-1 space-x-reverse transition shrink-0">
                         <i data-lucide="copy" class="w-3.5 h-3.5"></i>
                         <span id="copy-btn-text">کپی توکن</span>

@@ -90,6 +90,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Token Elements
   const bannerTokenDisplay = document.getElementById("banner-token-display");
+  const bannerToggleTokenBtn = document.getElementById("banner-toggle-token-btn");
+  const bannerTokenEyeIcon = document.getElementById("banner-token-eye-icon");
   const bannerCopyTokenBtn = document.getElementById("banner-copy-token-btn");
   const bannerCopyText = document.getElementById("banner-copy-text");
   const openTokenModalBtn = document.getElementById("open-token-modal-btn");
@@ -97,6 +99,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeTokenModalBtn = document.getElementById("close-token-modal-btn");
   const modalCancelBtn = document.getElementById("modal-cancel-btn");
   const modalTokenInput = document.getElementById("modal-token-input");
+  const modalToggleTokenBtn = document.getElementById("modal-toggle-token-btn");
+  const modalTokenEyeIcon = document.getElementById("modal-token-eye-icon");
   const modalCopyTokenBtn = document.getElementById("modal-copy-token-btn");
   const copyBtnText = document.getElementById("copy-btn-text");
   const modalRegenerateTokenBtn = document.getElementById("modal-regenerate-token-btn");
@@ -230,15 +234,37 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  let isBannerTokenVisible = false;
+  let isModalTokenVisible = false;
+
+  function maskToken(token) {
+    if (!token) return "";
+    if (token.length <= 8) return "••••••••";
+    return token.slice(0, 4) + "••••••••" + token.slice(-4);
+  }
+
   function updateTokenDisplay() {
     if (!currentUserToken) return;
 
     if (bannerTokenDisplay) {
-      bannerTokenDisplay.textContent = currentUserToken;
+      bannerTokenDisplay.textContent = isBannerTokenVisible ? currentUserToken : maskToken(currentUserToken);
     }
+    if (bannerTokenEyeIcon) {
+      bannerTokenEyeIcon.setAttribute("data-lucide", isBannerTokenVisible ? "eye-off" : "eye");
+    }
+
     if (modalTokenInput) {
       modalTokenInput.value = currentUserToken;
+      modalTokenInput.type = isModalTokenVisible ? "text" : "password";
     }
+    if (modalTokenEyeIcon) {
+      modalTokenEyeIcon.setAttribute("data-lucide", isModalTokenVisible ? "eye-off" : "eye");
+    }
+
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+
     if (curlCodeBlock) {
       const origin = window.location.origin;
       curlCodeBlock.textContent = `# ۱. استخراج فوری تصویر:\ncurl -X POST "${origin}/ocr/image" \\\n  -H "X-API-Key: ${currentUserToken}" \\\n  -F "file=@document.jpg" \\\n  -F "model=gemma4"\n\n# ۲. ثبت کتاب در صف پس‌زمینه:\ncurl -X POST "${origin}/api/tasks/book" \\\n  -H "X-API-Key: ${currentUserToken}" \\\n  -F "file=@book.pdf" \\\n  -F "model=gemma4" \\\n  -F "cooldown_seconds=1.0"`;
@@ -293,6 +319,20 @@ document.addEventListener("DOMContentLoaded", () => {
           btnElement.textContent = defaultLabel;
         }, 2000);
       }
+    });
+  }
+
+  if (bannerToggleTokenBtn) {
+    bannerToggleTokenBtn.addEventListener("click", () => {
+      isBannerTokenVisible = !isBannerTokenVisible;
+      updateTokenDisplay();
+    });
+  }
+
+  if (modalToggleTokenBtn) {
+    modalToggleTokenBtn.addEventListener("click", () => {
+      isModalTokenVisible = !isModalTokenVisible;
+      updateTokenDisplay();
     });
   }
 
