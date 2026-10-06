@@ -34,6 +34,60 @@ document.addEventListener("DOMContentLoaded", () => {
   const charWordCount = document.getElementById("char-word-count");
   const navUserActions = document.getElementById("nav-user-actions");
 
+  // Prompt Mode Elements
+  const promptModeButtons = document.querySelectorAll(".prompt-mode-btn");
+  const selectedPromptModeInput = document.getElementById("selected-prompt-mode");
+  const resultPromptContainer = document.getElementById("result-prompt-container");
+  const resultPromptBadge = document.getElementById("result-prompt-badge");
+
+  function setPromptMode(mode) {
+    if (selectedPromptModeInput) selectedPromptModeInput.value = mode;
+    promptModeButtons.forEach((btn) => {
+      const isCurrent = btn.getAttribute("data-prompt-mode") === mode;
+      const dot = btn.querySelector(".prompt-dot");
+      const indicator = btn.querySelector(".prompt-indicator");
+      const title = btn.querySelector(".prompt-title");
+      if (isCurrent) {
+        btn.classList.add("border-red-500", "bg-red-950/40", "shadow-sm", "shadow-red-950/30");
+        btn.classList.remove("border-zinc-800", "bg-zinc-900/60");
+        if (indicator) {
+          indicator.classList.add("border-red-500");
+          indicator.classList.remove("border-zinc-600");
+        }
+        if (dot) {
+          dot.classList.add("bg-red-500");
+          dot.classList.remove("bg-transparent");
+        }
+        if (title) {
+          title.classList.add("text-white");
+          title.classList.remove("text-slate-300");
+        }
+      } else {
+        btn.classList.remove("border-red-500", "bg-red-950/40", "shadow-sm", "shadow-red-950/30");
+        btn.classList.add("border-zinc-800", "bg-zinc-900/60");
+        if (indicator) {
+          indicator.classList.remove("border-red-500");
+          indicator.classList.add("border-zinc-600");
+        }
+        if (dot) {
+          dot.classList.remove("bg-red-500");
+          dot.classList.add("bg-transparent");
+        }
+        if (title) {
+          title.classList.remove("text-white");
+          title.classList.add("text-slate-300");
+        }
+      }
+    });
+  }
+
+  promptModeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.getAttribute("data-prompt-mode") || "classical";
+      setPromptMode(mode);
+    });
+  });
+
   // Token Elements
   const bannerTokenDisplay = document.getElementById("banner-token-display");
   const bannerCopyTokenBtn = document.getElementById("banner-copy-token-btn");
@@ -440,9 +494,12 @@ document.addEventListener("DOMContentLoaded", () => {
     formData.append("crop_whitespaces", cropToggle.checked);
     formData.append("scale", scaleSlider.value);
     formData.append("use_llm", llmToggle.checked);
-
-    if (llmToggle.checked && secondaryModelSelect.value) {
-      formData.append("secondary_model", secondaryModelSelect.value);
+    if (llmToggle.checked) {
+      if (secondaryModelSelect.value) {
+        formData.append("secondary_model", secondaryModelSelect.value);
+      }
+      const promptMode = selectedPromptModeInput ? selectedPromptModeInput.value : "classical";
+      formData.append("prompt_mode", promptMode);
     }
 
     if (selectedFile.type === "application/pdf" || selectedFile.name.endsWith(".pdf")) {
@@ -550,8 +607,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (llmDur > 0) {
       resultLlmContainer.hidden = false;
       resultLlmDuration.textContent = `${llmDur} ثانیه`;
+
+      const promptMode = Array.isArray(result) && result[0] ? result[0].prompt_mode : result.prompt_mode;
+      if (resultPromptContainer) {
+        resultPromptContainer.classList.remove("hidden");
+        if (resultPromptBadge) {
+          resultPromptBadge.textContent = promptMode === "general" ? "متون عمومی و اداری" : "متون کهن و حوزوی (اعراب و شعر)";
+        }
+      }
     } else {
       resultLlmContainer.hidden = true;
+      if (resultPromptContainer) {
+        resultPromptContainer.classList.add("hidden");
+      }
     }
 
     // Word and character count
@@ -990,8 +1058,12 @@ document.addEventListener("DOMContentLoaded", () => {
       formData.append("use_llm", llmToggle.checked);
       formData.append("cooldown_seconds", cooldownInput ? cooldownInput.value || "1.0" : "1.0");
 
-      if (llmToggle.checked && secondaryModelSelect.value) {
-        formData.append("secondary_model", secondaryModelSelect.value);
+      if (llmToggle.checked) {
+        if (secondaryModelSelect.value) {
+          formData.append("secondary_model", secondaryModelSelect.value);
+        }
+        const promptMode = selectedPromptModeInput ? selectedPromptModeInput.value : "classical";
+        formData.append("prompt_mode", promptMode);
       }
 
       if (selectedFile.type === "application/pdf" || selectedFile.name.endsWith(".pdf")) {
@@ -1208,7 +1280,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </span>
                 <span class="font-bold text-xs text-white">${escapeHtml(t.filename)}</span>
                 <span class="text-[11px] text-red-400 bg-red-950/40 border border-red-500/20 px-2 py-0.5 rounded-md font-mono">
-                  ${escapeHtml(t.primary_model)}${t.use_llm ? " + LLM" : ""}
+                  ${escapeHtml(t.primary_model)}${t.use_llm ? ` + LLM (${t.prompt_mode === "general" ? "عمومی" : "کهن"})` : ""}
                 </span>
               </div>
 

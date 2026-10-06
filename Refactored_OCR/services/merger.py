@@ -1,42 +1,82 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Dict, Any, Optional
 from openai import OpenAI
 
 class OCRCleanedText(BaseModel):
     text: str = Field(..., description="Cleaned and consolidated OCR text")
+
+# Specialized Prompt Registry with user-facing titles
+PROMPTS: Dict[str, Dict[str, str]] = {
+    "classical": {
+        "title": "متون کهن و کتب حوزوی (اعراب کامل، شعر و پاورقی)",
+        "description": "مخصوص کتب کهن و اسلامی؛ حفظ کامل اعراب و حرکات، شعر دو مصراعی روبه‌روی هم با ***، پاورقی‌ها با ---، و عدم تحریف واژگان.",
+        "system_prompt": (
+            "تو یک ویراستار حرفه‌ای متون کهن، کتاب‌ها و نسخه‌های دینی، تاریخی و حوزوی (فارسی و عربی کلاسیک) هستی. "
+            "وظیفه تو استخراج دقیق متن از خروجی‌های مدل‌های OCR و بازنویسی آن با رعایت کامل استانداردهای سخت‌گیرانه زیر است:\n\n"
+            "📌 قوانین اصلی:\n"
+            "۱. متن باید دقیقاً مطابق محتوای سند باشد؛ بدون اضافه یا حذف حتی یک کلمه یا حرف. هرگز متنی از خودت اضافه نکن و کلمه‌ای را تغییر نده.\n"
+            "۲. اعراب‌گذاری کامل و دقیق (فتحه، ضمه، کسره، تنوین‌ها، شَدّه و سکون) باید حفظ یا اصلاح دقیق شود.\n"
+            "۳. هیچ غلط املایی یا نحوی نباید در خروجی وجود داشته باشد.\n"
+            "۴. تمامی اعداد به صورت صحیح و در جای خود قرار گیرند و نامرتب نباشند.\n"
+            "۵. برای نام پیامبران، امامان و شخصیت‌های مقدس، عبارات احترام کتاب عیناً رعایت شود (علیه السلام، علیهم السلام، صلی الله علیه وآله، سلام الله علیها، رحمه الله علیه، قدّس سرّه، دام ظله).\n"
+            "۶. ساختار صفحه کاملاً رعایت شود:\n"
+            "   - تیترها با علامت زیر در ابتدای خط مشخص شوند:\n"
+            "     ## عنوان\n"
+            "   - شعرها باید در دو مصراع روبه‌روی هم نوشته شده و بین دو مصراع از علامت *** استفاده شود:\n"
+            "     شَعَرُ أَوَّلُ شَطْرٍ *** شَعَرُ ثانِي شَطْرٍ\n"
+            "   - پاورقی‌ها باید در انتهای متن صفحه و جدا از متن اصلی به این شکل آورده شوند:\n"
+            "     ---\n"
+            "     (1) متن پاورقی دقیقاً مطابق سند\n"
+            "۷. نشانه‌گذاری و پاراگراف‌بندی دقیق مطابق کتاب رعایت شود و از شکستن بی‌دلیل خطوط پرهیز شود.\n\n"
+            "پاسخ را منحصراً در قالب ساختار JSON ارسال کن: {\"text\": \"...\"}."
+        )
+    },
+    "general": {
+        "title": "متون عمومی و اداری (استاندارد معاصر)",
+        "description": "مناسب اسناد معاصر، مقالات و نامه‌ها؛ پاک‌سازی خطاهای تایپی OCR، پیوسته‌سازی سطور و پاراگراف‌بندی روان.",
+        "system_prompt": (
+            "تو یک ویراستار حرفه‌ای متون عمومی، مقالات و اسناد معاصر به زبان‌های فارسی، عربی و انگلیسی هستی. "
+            "کاربر نتایج مدل‌های مختلف OCR برای یک صفحه سند را برایت ارسال می‌کند. "
+            "وظیفه تو پاک‌سازی خطاهای OCR، اصلاح املای کلمات آسیب‌دیده، پیوسته‌سازی سطور به پاراگراف‌های منسجم و ارائه نسخه‌ای تمیز و بی‌نقص است.\n\n"
+            "📌 قوانین اصلی:\n"
+            "۱. از خروجی اصلی به عنوان قالب پایه استفاده کن و تنها غلط‌های واضح تایپی و کاراکترهای آسیب‌دیده OCR را بر اساس سایر خروجی‌ها تصحیح کن.\n"
+            "۲. سطور متن را پیوسته و پاراگراف‌بندی را طبیعی کن (از شکستن خطوط در میان جملات خودداری کن).\n"
+            "۳. هیچ جمله یا مفهوم جدیدی به متن اضافه نکن و متن را بازنویسی سلیقه‌ای نکن.\n"
+            "۴. علائم نگارشی (نقطه، کاما، گیومه، پرانتز) را به شکل استاندارد اصلاح کن.\n\n"
+            "پاسخ را منحصراً در قالب ساختار JSON ارسال کن: {\"text\": \"...\"}."
+        )
+    }
+}
 
 class LLMMerger:
     def __init__(self, api_key: str, base_url: str, model_name: str):
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model_name = model_name
 
-    def merge(self, ocr_outputs: List[str]) -> str:
+    @classmethod
+    def get_prompt_options(cls) -> List[Dict[str, str]]:
+        """Return user-facing prompt titles and keys for UI selection."""
+        return [
+            {"id": k, "title": v["title"], "description": v["description"]}
+            for k, v in PROMPTS.items()
+        ]
+
+    def merge(self, ocr_outputs: List[str], prompt_mode: str = "classical") -> str:
         if not ocr_outputs:
             return ""
-        if len(ocr_outputs) == 1:
-            # If only one output, we still might want to clean it if requested,
-            # but usually merging implies at least two.
-            # However, the original code used it for single output too (clean_ocr_text).
-            pass
 
         formatted_outputs = "\n".join(
             f"-----\nOCR output {i+1}:\n{txt}\n-----"
             for i, txt in enumerate(ocr_outputs)
         )
 
+        selected_cfg = PROMPTS.get(prompt_mode, PROMPTS["classical"])
+        system_instruction = selected_cfg["system_prompt"]
+
         messages = [
             {
                 "role": "system",
-                "content": (
-                    "You are a Persian+English+Arabic text rewriter. User will send you the results of multi OCR models for only one page. in other terms, the text of models are very similar. "
-                    "Your job is to write only one cleaned version of OCR.\n\n"
-                    "You will get OCR outputs separated like this (all for the same document page, but from different models):\n"
-                    "-----\nOCR output 1:\n...\n-----\nOCR output 2:\n...\n-----\n"
-                    "Use OCR 1 as the main template. Rewrite it to fix wrong words and obvious OCR mistakes. "
-                    "Use other outputs only if they suggest a better word for corrupted parts in OCR 1. "
-                    "Do not add extra words. Avoid repeating content. Focus on a good meaning on sentences."
-                    "Respond only in JSON: {\"text\": \"...\"}."
-                )
+                "content": system_instruction
             },
             {"role": "user", "content": formatted_outputs}
         ]

@@ -61,6 +61,7 @@ async def create_book_ocr_task(
     crop_whitespaces: bool = Form(False, description="برش حاشیه‌های سفید"),
     scale: float = Form(config.DEFAULT_SCALE, ge=0.2, le=4.0, description="ضریب مقیاس تصویر"),
     use_llm: bool = Form(config.DEFAULT_USE_LLM, description="تصحیح و ادغام با LLM"),
+    prompt_mode: str = Form("classical", description="شیوه و پرامپت ویراستاری هوشمند: 'classical' یا 'general'"),
     cooldown_seconds: float = Form(
         config.TASK_PAGE_COOLDOWN_SECONDS,
         ge=0.0,
@@ -186,6 +187,7 @@ async def create_book_ocr_task(
         crop_whitespaces=crop_whitespaces,
         scale=scale,
         use_llm=use_llm,
+        prompt_mode=prompt_mode,
         cooldown_seconds=cooldown_seconds,
         start_page=s_page,
         end_page=e_page,

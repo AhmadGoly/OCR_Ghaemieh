@@ -81,6 +81,7 @@ class BaseOCRResponse(BaseModel):
     secondary_model: Optional[str] = Field(None, description="Secondary model name if dual-model merging was enabled.")
     ocr_duration: float = Field(..., description="Vision/OCR extraction processing time in seconds.")
     llm_duration: float = Field(..., description="LLM text reconciliation/cleaning duration in seconds (-1.0 if not used).")
+    prompt_mode: Optional[str] = Field(None, description="LLM prompt mode used for reconciliation ('classical' or 'general').")
 
 class ImageOCRResponse(BaseOCRResponse):
     original_image: Optional[str] = Field(None, description="Base64-encoded raw input image.")
@@ -392,6 +393,7 @@ async def ocr_image(
     scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0, description="Image dimension rescaling multiplier"),
     crop_whitespaces: bool = Form(False, description="Auto-crop document white margins"),
     use_llm: bool = Form(config.DEFAULT_USE_LLM, description="Enable LLM post-processing and text merging"),
+    prompt_mode: str = Form("classical", description="Prompt mode for LLM merger: 'classical' or 'general'"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -429,7 +431,8 @@ async def ocr_image(
                     contrast=contrast,
                     scale=scale,
                     crop_whitespaces=crop_whitespaces,
-                    use_llm=use_llm
+                    use_llm=use_llm,
+                    prompt_mode=prompt_mode
                 )
             )
 
@@ -474,6 +477,7 @@ async def ocr_pdf(
     scale: float = Form(config.DEFAULT_SCALE, ge=0.1, le=5.0, description="Image dimension rescaling multiplier"),
     crop_whitespaces: bool = Form(False, description="Auto-crop document white margins"),
     use_llm: bool = Form(config.DEFAULT_USE_LLM, description="Enable LLM post-processing and text merging"),
+    prompt_mode: str = Form("classical", description="Prompt mode for LLM merger: 'classical' or 'general'"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -513,7 +517,8 @@ async def ocr_pdf(
                     contrast=contrast,
                     scale=scale,
                     crop_whitespaces=crop_whitespaces,
-                    use_llm=use_llm
+                    use_llm=use_llm,
+                    prompt_mode=prompt_mode
                 )
             )
 

@@ -61,7 +61,7 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۶.۳</span>
+                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۶.۴</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
@@ -224,18 +224,46 @@
                         <label for="llm-toggle" class="text-xs font-bold text-white cursor-pointer">فعال‌سازی تصحیح هوشمند و ادغام دوگانه مدل‌ها با LLM</label>
                     </div>
 
-                    <div id="secondary-model-container" class="hidden pl-6 pr-6 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2">
-                        <label for="secondary-model-select" class="block font-semibold text-slate-300">مدل دوم برای مقایسه و ترکیب (Secondary Model):</label>
-                        <select id="secondary-model-select" class="w-full max-w-md px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white outline-none focus:border-red-500">
-                            <option value="">هیچکدام (فقط پاکسازی تک‌مدلی)</option>
-                            <option value="olmocr_2b" selected>OLMOCR 2B (VLM)</option>
-                            <option value="gemma4">Gemma 4 (VLM 26B)</option>
-                            <option value="tesseract">Tesseract OCR (CPU)</option>
-                            <option value="docling">IBM Docling</option>
-                            <option value="qwen">Qwen 2 VL (GPU)</option>
-                            <option value="varco">Varco Vision (GPU)</option>
-                        </select>
-                        <p class="text-[11px] text-slate-400">هوش مصنوعی هر دو خروجی را بررسی کرده و نسخه بدون خطای ترکیبی تولید می‌کند.</p>
+                    <div id="secondary-model-container" class="hidden pl-6 pr-6 py-4 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-4">
+                        <div class="space-y-1.5">
+                            <label for="secondary-model-select" class="block font-semibold text-slate-300">مدل دوم برای مقایسه و ترکیب (Secondary Model):</label>
+                            <select id="secondary-model-select" class="w-full max-w-md px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white outline-none focus:border-red-500">
+                                <option value="">هیچکدام (فقط پاکسازی تک‌مدلی)</option>
+                                <option value="olmocr_2b" selected>OLMOCR 2B (VLM)</option>
+                                <option value="gemma4">Gemma 4 (VLM 26B)</option>
+                                <option value="tesseract">Tesseract OCR (CPU)</option>
+                                <option value="docling">IBM Docling</option>
+                                <option value="qwen">Qwen 2 VL (GPU)</option>
+                                <option value="varco">Varco Vision (GPU)</option>
+                            </select>
+                            <p class="text-[11px] text-slate-400">هوش مصنوعی هر دو خروجی را بررسی کرده و نسخه بدون خطای ترکیبی تولید می‌کند.</p>
+                        </div>
+
+                        <!-- Prompt Selection Buttons -->
+                        <div class="space-y-2 pt-2 border-t border-zinc-800/80">
+                            <label class="block font-semibold text-slate-300 text-xs">شیوه و پرامپت ویراستاری هوشمند (Prompt Mode):</label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="prompt-mode-group">
+                                <button type="button" data-prompt-mode="classical" class="prompt-mode-btn p-3 rounded-xl border border-red-500 bg-red-950/40 text-right transition flex items-start space-x-2.5 space-x-reverse focus:outline-none shadow-sm shadow-red-950/30">
+                                    <div class="w-4 h-4 rounded-full border-2 border-red-500 flex items-center justify-center mt-0.5 shrink-0 prompt-indicator">
+                                        <div class="w-2 h-2 rounded-full bg-red-500 prompt-dot"></div>
+                                    </div>
+                                    <div class="flex-1">
+                                        <span class="block text-xs font-bold text-white prompt-title">متون کهن و کتب حوزوی (اعراب کامل، شعر و پاورقی)</span>
+                                        <span class="block text-[11px] text-slate-400 mt-0.5">مخصوص کتب قائمیه؛ حفظ کامل حرکات، اعراب، شعر دو مصراعی و پاورقی‌ها</span>
+                                    </div>
+                                </button>
+                                <button type="button" data-prompt-mode="general" class="prompt-mode-btn p-3 rounded-xl border border-zinc-800 bg-zinc-900/60 text-right transition flex items-start space-x-2.5 space-x-reverse focus:outline-none hover:border-zinc-700">
+                                    <div class="w-4 h-4 rounded-full border-2 border-zinc-600 flex items-center justify-center mt-0.5 shrink-0 prompt-indicator">
+                                        <div class="w-2 h-2 rounded-full bg-transparent prompt-dot"></div>
+                                    </div>
+                                    <div class="flex-1">
+                                        <span class="block text-xs font-bold text-slate-300 prompt-title">متون عمومی و اداری (استاندارد معاصر)</span>
+                                        <span class="block text-[11px] text-slate-400 mt-0.5">پاک‌سازی غلط‌های املایی، رفع خط‌شکستگی‌ها و پاراگراف‌بندی اسناد معاصر</span>
+                                    </div>
+                                </button>
+                            </div>
+                            <input type="hidden" id="selected-prompt-mode" value="classical" />
+                        </div>
                     </div>
                 </div>
 
@@ -286,6 +314,10 @@
                     <div id="result-llm-container">
                         <span class="text-slate-400">مدت زمان ادغام LLM: </span>
                         <span id="result-llm-duration" class="font-mono text-emerald-400"></span>
+                    </div>
+                    <div id="result-prompt-container" class="hidden">
+                        <span class="text-slate-400">پرامپت ویراستاری: </span>
+                        <span id="result-prompt-badge" class="font-medium text-amber-300 bg-amber-950/40 border border-amber-500/20 px-2 py-0.5 rounded text-[11px]"></span>
                     </div>
                 </div>
 
@@ -423,7 +455,7 @@
 
     <!-- Footer -->
     <footer class="border-t border-zinc-800/80 bg-[#121215]/40 py-6 mt-12 text-center text-xs text-slate-500">
-        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۶.۳ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
+        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۶.۴ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
     </footer>
 
     <!-- Task Pages Detail Modal -->

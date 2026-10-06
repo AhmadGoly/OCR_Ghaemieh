@@ -253,7 +253,8 @@ class BookTaskManager:
                                         contrast=task.contrast,
                                         scale=task.scale,
                                         crop_whitespaces=task.crop_whitespaces,
-                                        use_llm=task.use_llm
+                                        use_llm=task.use_llm,
+                                        prompt_mode=getattr(task, "prompt_mode", "classical") or "classical"
                                     )
                                     # Drop base64 images to save RAM
                                     res_dict.pop("original_image", None)
@@ -416,6 +417,7 @@ class BookTaskManager:
             "crop_whitespaces": task.crop_whitespaces,
             "scale": task.scale,
             "use_llm": task.use_llm,
+            "prompt_mode": getattr(task, "prompt_mode", "classical"),
             "cooldown_seconds": task.cooldown_seconds,
             "start_page": task.start_page,
             "end_page": task.end_page,

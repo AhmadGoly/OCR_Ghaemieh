@@ -97,6 +97,7 @@ class OCRBookTask(Base):
     crop_whitespaces = Column(Boolean, default=False, nullable=False)
     scale = Column(Float, default=1.0, nullable=False)
     use_llm = Column(Boolean, default=False, nullable=False)
+    prompt_mode = Column(String(32), default="classical", nullable=True)
     cooldown_seconds = Column(Float, default=1.0, nullable=False)
 
     # Page Tracking & Progress

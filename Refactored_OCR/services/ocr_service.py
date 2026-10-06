@@ -20,7 +20,8 @@ class OCRService:
                       contrast: bool = False,
                       scale: float = 1.0,
                       crop_whitespaces: bool = False,
-                      use_llm: bool = False) -> dict:
+                      use_llm: bool = False,
+                      prompt_mode: str = "classical") -> dict:
         # Preprocessing
         original_image = image.copy()
         processed_image = image
@@ -72,7 +73,7 @@ class OCRService:
 
             if self.merger:
                 llm_start = time.time()
-                final_text = self.merger.merge(ocr_outputs)
+                final_text = self.merger.merge(ocr_outputs, prompt_mode=prompt_mode)
                 llm_duration = time.time() - llm_start
 
         return {
@@ -81,6 +82,7 @@ class OCRService:
             "secondary_model": secondary_model_name if len(ocr_outputs) > 1 else None,
             "ocr_duration": ocr_duration,
             "llm_duration": llm_duration,
+            "prompt_mode": prompt_mode if use_llm else None,
             "original_image": ImageProcessor.image_to_base64(original_image),
             "processed_image": ImageProcessor.image_to_base64(processed_image),
         }
@@ -96,7 +98,8 @@ class OCRService:
                     contrast: bool = False,
                     scale: float = 1.0,
                     crop_whitespaces: bool = False,
-                    use_llm: bool = False) -> List[dict]:
+                    use_llm: bool = False,
+                    prompt_mode: str = "classical") -> List[dict]:
         images = PDFUtils.pdf_to_images(pdf_path, start_page, end_page)
         if not images:
             return []
@@ -109,7 +112,8 @@ class OCRService:
             results = []
             for i, img in enumerate(images, start=start_page):
                 res = self.process_image(img, primary_model_name, secondary_model_name, lang,
-                                         preprocess, contrast, scale, crop_whitespaces, use_llm)
+                                         preprocess, contrast, scale, crop_whitespaces, use_llm,
+                                         prompt_mode=prompt_mode)
                 res["page"] = i
                 res.pop("original_image", None)
                 res.pop("processed_image", None)
@@ -122,7 +126,8 @@ class OCRService:
                 executor.submit(
                     self.process_image,
                     img, primary_model_name, secondary_model_name, lang,
-                    preprocess, contrast, scale, crop_whitespaces, use_llm
+                    preprocess, contrast, scale, crop_whitespaces, use_llm,
+                    prompt_mode=prompt_mode
                 ): page_num
                 for page_num, img in enumerate(images, start=start_page)
             }
