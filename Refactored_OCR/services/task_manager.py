@@ -30,6 +30,7 @@ class BookTaskManager:
     Asynchronous Background Task Manager for Multi-Page Books & Batch OCR Documents.
 
     Key Capabilities:
+    - Multi-tenant Page-Level Round-Robin Scheduling (prevents starvation and head-of-line blocking).
     - Memory-safe single-page streaming (prevents RAM OOM on 500+ page books).
     - Database-backed per-page checkpointing (auto-resumes interrupted tasks on server restart).
     - Smart per-page retry with exponential backoff (isolates corrupt pages without failing the book).
@@ -134,7 +135,7 @@ class BookTaskManager:
         return False
 
     async def _worker_loop(self, worker_id: int) -> None:
-        """Background worker loop that pulls book tasks from the queue and processes them."""
+        """Background worker loop that pulls book tasks from the queue and processes page slices in round-robin fashion."""
         while self._running:
             try:
                 task_id = await self._queue.get()
@@ -147,16 +148,25 @@ class BookTaskManager:
                 continue
 
             self._active_tasks.add(task_id)
+            has_more = False
             try:
-                await self._process_task(task_id, worker_id)
+                has_more = await self._process_task_slice(task_id, worker_id)
             except Exception as e:
                 logger.error(f"[Worker-{worker_id}] Unhandled error processing task {task_id}: {e}")
             finally:
                 self._active_tasks.discard(task_id)
                 self._queue.task_done()
 
-    async def _process_task(self, task_id: str, worker_id: int) -> None:
-        """Process a book task page-by-page with checkpointing, retry, and cooldown."""
+            # Page Round-Robin: If task still has pending pages and is not cancelled/shutting down, re-enqueue to queue tail
+            if has_more and task_id not in self._cancelled_tasks and self._running:
+                self._queued_tasks.add(task_id)
+                await self._queue.put(task_id)
+
+    async def _process_task_slice(self, task_id: str, worker_id: int) -> bool:
+        """Process a chunk of pages for a book task, yielding control for page-level round-robin.
+
+        Returns True if more pages remain to be processed, or False if the task has concluded.
+        """
         async with AsyncSessionLocal() as session:
             stmt = (
                 select(OCRBookTask)
@@ -166,20 +176,20 @@ class BookTaskManager:
             res = await session.execute(stmt)
             task = res.scalar_one_or_none()
             if not task:
-                return
+                return False
 
             if task_id in self._cancelled_tasks or task.status == "cancelled":
                 task.status = "cancelled"
                 task.current_page = None
                 await session.commit()
-                return
+                return False
 
             if not task.file_path or not os.path.exists(task.file_path):
                 task.status = "failed"
                 task.error_message = "فایل مبدا کتاب روی سرور یافت نشد یا حذف شده است."
                 task.current_page = None
                 await session.commit()
-                return
+                return False
 
             task.status = "processing"
             if not task.started_at:
@@ -193,6 +203,15 @@ class BookTaskManager:
                 if p.status in ("pending", "failed", "processing")
             ]
 
+            if not pending_pages:
+                # No more pending pages: finalize task
+                self._finalize_task_state(task, session)
+                await session.commit()
+                return False
+
+            chunk_size = max(1, int(getattr(config, "TASK_ROUND_ROBIN_CHUNK_SIZE", 1)))
+            slice_pages = pending_pages[:chunk_size]
+
             max_retries = max(1, int(getattr(config, "TASK_MAX_PAGE_RETRIES", 3)))
             cooldown_sec = max(
                 0.0,
@@ -203,22 +222,20 @@ class BookTaskManager:
                 or (task.use_llm and task.secondary_model in LOCAL_GPU_MODELS)
             )
 
-            total_pending = len(pending_pages)
-
-            for idx, page_obj in enumerate(pending_pages):
+            for idx, page_obj in enumerate(slice_pages):
                 # Check if cancelled before starting page
                 if task_id in self._cancelled_tasks:
                     task.status = "cancelled"
                     task.current_page = None
                     await session.commit()
-                    return
+                    return False
 
                 # Refresh task status in case cancelled via DB
                 await session.refresh(task)
                 if task.status == "cancelled":
                     task.current_page = None
                     await session.commit()
-                    return
+                    return False
 
                 page_num = page_obj.page_number
                 task.current_page = page_num
@@ -296,7 +313,7 @@ class BookTaskManager:
                         task.status = "cancelled"
                         task.current_page = None
                         await session.commit()
-                        return
+                        return False
                     page_obj.status = "failed"
 
                 # Update aggregate counters on parent task immediately
@@ -304,51 +321,67 @@ class BookTaskManager:
                 await session.commit()
 
                 # Periodic garbage collection to keep memory footprint flat on huge books
-                if idx % 5 == 0:
+                if page_num % 5 == 0:
                     gc.collect()
 
-                # Cooldown / Rest period between pages so GPU/CPU/API does not overload
-                if idx < total_pending - 1 and cooldown_sec > 0 and task_id not in self._cancelled_tasks:
+                # Cooldown between pages inside this chunk
+                if idx < len(slice_pages) - 1 and cooldown_sec > 0 and task_id not in self._cancelled_tasks:
                     await asyncio.sleep(cooldown_sec)
 
-            # Finalize Task State
-            self._recalculate_task_aggregates(task)
-            task.current_page = None
-            task.completed_at = datetime.now(timezone.utc)
+            # Check if there are still unfinished pages in the task
+            remaining_unprocessed = len(pending_pages) - len(slice_pages)
+            if remaining_unprocessed > 0 and task_id not in self._cancelled_tasks:
+                self._recalculate_task_aggregates(task)
+                await session.commit()
 
-            if task_id in self._cancelled_tasks or task.status == "cancelled":
-                task.status = "cancelled"
-            elif task.completed_pages == task.total_pages and task.failed_pages == 0:
-                task.status = "completed"
-                task.error_message = None
-            elif task.completed_pages > 0 and task.failed_pages > 0:
-                task.status = "completed_with_errors"
-                task.error_message = f"{task.failed_pages} صفحه با خطا مواجه شد. می‌توانید صفحات ناموفق را مجدداً تلاش کنید یا نسخه فعلی را دانلود نمایید."
-            else:
-                task.status = "failed"
-                first_err = next((p.last_error for p in task.pages if p.last_error), "خطا در استخراج صفحات کتاب")
-                task.error_message = first_err
+                # If no other tasks are waiting in the queue, apply cooldown between rounds
+                if cooldown_sec > 0 and self._queue.empty() and len(self._active_tasks) <= 1:
+                    await asyncio.sleep(cooldown_sec)
 
-            # Record in ExtractionHistory for unified admin statistics
-            if task.completed_pages > 0:
-                hist = ExtractionHistory(
-                    user_id=task.user_id,
-                    filename=task.filename,
-                    file_type=f"book_{task.file_type}",
-                    pages_count=task.completed_pages,
-                    primary_model=task.primary_model,
-                    secondary_model=task.secondary_model,
-                    use_llm=task.use_llm,
-                    ocr_duration=task.total_ocr_duration,
-                    llm_duration=task.total_llm_duration if task.total_llm_duration > 0 else -1.0
-                )
-                session.add(hist)
+                return True
 
+            # All pages in this task are done: finalize task state
+            self._finalize_task_state(task, session)
             await session.commit()
             logger.info(
                 f"[Task {task_id}] Finished with status='{task.status}' "
                 f"(completed={task.completed_pages}/{task.total_pages}, failed={task.failed_pages})"
             )
+            return False
+
+    def _finalize_task_state(self, task: OCRBookTask, session) -> None:
+        """Helper to finalize status, timestamps, and ExtractionHistory for a completed task."""
+        self._recalculate_task_aggregates(task)
+        task.current_page = None
+        task.completed_at = datetime.now(timezone.utc)
+
+        if task.id in self._cancelled_tasks or task.status == "cancelled":
+            task.status = "cancelled"
+        elif task.completed_pages == task.total_pages and task.failed_pages == 0:
+            task.status = "completed"
+            task.error_message = None
+        elif task.completed_pages > 0 and task.failed_pages > 0:
+            task.status = "completed_with_errors"
+            task.error_message = f"{task.failed_pages} صفحه با خطا مواجه شد. می‌توانید صفحات ناموفق را مجدداً تلاش کنید یا نسخه فعلی را دانلود نمایید."
+        else:
+            task.status = "failed"
+            first_err = next((p.last_error for p in task.pages if p.last_error), "خطا در استخراج صفحات کتاب")
+            task.error_message = first_err
+
+        # Record in ExtractionHistory for unified admin statistics
+        if task.completed_pages > 0:
+            hist = ExtractionHistory(
+                user_id=task.user_id,
+                filename=task.filename,
+                file_type=f"book_{task.file_type}",
+                pages_count=task.completed_pages,
+                primary_model=task.primary_model,
+                secondary_model=task.secondary_model,
+                use_llm=task.use_llm,
+                ocr_duration=task.total_ocr_duration,
+                llm_duration=task.total_llm_duration if task.total_llm_duration > 0 else -1.0
+            )
+            session.add(hist)
 
     @staticmethod
     def _recalculate_task_aggregates(task: OCRBookTask) -> None:
@@ -376,6 +409,8 @@ class BookTaskManager:
             "active_book_tasks": len(self._active_tasks),
             "queued_book_tasks": self._queue.qsize(),
             "worker_concurrency": getattr(config, "TASK_WORKER_CONCURRENCY", 2),
+            "round_robin_chunk_size": getattr(config, "TASK_ROUND_ROBIN_CHUNK_SIZE", 1),
+            "scheduling_policy": "page_round_robin",
             "default_cooldown_seconds": getattr(config, "TASK_PAGE_COOLDOWN_SECONDS", 1.0),
             "max_page_retries": getattr(config, "TASK_MAX_PAGE_RETRIES", 3),
         }

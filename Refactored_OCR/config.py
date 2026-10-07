@@ -2,7 +2,7 @@ import os
 
 from typing import Union, Sequence
 
-VERSION = "3.7.1"
+VERSION = "3.8.0"
 
 try:
     from dotenv import load_dotenv
@@ -47,6 +47,7 @@ TASK_STORAGE_DIR = os.environ.get(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", "tasks")
 )
 TASK_WORKER_CONCURRENCY = int(os.environ.get("TASK_WORKER_CONCURRENCY", 2))
+TASK_ROUND_ROBIN_CHUNK_SIZE = max(1, int(os.environ.get("TASK_ROUND_ROBIN_CHUNK_SIZE", 1)))
 TASK_PAGE_COOLDOWN_SECONDS = float(os.environ.get("TASK_PAGE_COOLDOWN_SECONDS", 1.0))
 TASK_MAX_PAGE_RETRIES = int(os.environ.get("TASK_MAX_PAGE_RETRIES", 3))
 TASK_DEFAULT_LIST_LIMIT = int(os.environ.get("TASK_DEFAULT_LIST_LIMIT", 10))
@@ -189,6 +190,7 @@ def get_config_dict() -> dict:
         },
         "task_processing": {
             "worker_concurrency": TASK_WORKER_CONCURRENCY,
+            "round_robin_chunk_size": TASK_ROUND_ROBIN_CHUNK_SIZE,
             "page_cooldown_seconds": TASK_PAGE_COOLDOWN_SECONDS,
             "max_page_retries": TASK_MAX_PAGE_RETRIES,
             "default_list_limit": TASK_DEFAULT_LIST_LIMIT,
