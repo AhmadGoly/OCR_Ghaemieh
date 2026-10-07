@@ -40,6 +40,12 @@ Instructions and operating guidelines for Antigravity AI coding agents working o
    - Development and execution take place in Linux / WSL environments.
    - Ensure file paths, Docker mountings, and line endings remain POSIX-compliant.
 
+7. **Database Backward Compatibility & Auto-Migration Mandate**:
+   - Whenever introducing, renaming, or modifying database models/columns in [`Refactored_OCR/db/models.py`](file:///mnt/d/OCR/Refactored_OCR/db/models.py), agents **MUST** ensure backward compatibility with older, pre-existing database volumes.
+   - SQLAlchemy's `Base.metadata.create_all` only creates new tables and **never** alters existing tables or adds newly declared columns.
+   - Any new column or schema adjustment **MUST** be accompanied by an automated, idempotent migration step in [`Refactored_OCR/db/init_db.py`](file:///mnt/d/OCR/Refactored_OCR/db/init_db.py) (e.g., using `ALTER TABLE <table> ADD COLUMN IF NOT EXISTS <column> <type> [DEFAULT <val>];`).
+   - Never require manual DB interventions or assume a freshly initialized database. The application must self-heal on startup so that newer code runs seamlessly against existing databases without 500 errors or crashes.
+
 ---
 
 ## 2. Project Overview
@@ -72,7 +78,7 @@ Instructions and operating guidelines for Antigravity AI coding agents working o
 
 When executing tasks:
 1. **Analyze Context**: Inspect existing files and structure before adding new code.
-2. **Implement Changes**: Ensure modular, testable, and clean code.
+2. **Implement Changes**: Ensure modular, testable, and clean code. When altering DB models, add self-healing migration statements in [`init_db.py`](file:///mnt/d/OCR/Refactored_OCR/db/init_db.py) to guarantee legacy database compatibility.
 3. **Bump Version**: Update `VERSION` in [`Refactored_OCR/config.py`](file:///mnt/d/OCR/Refactored_OCR/config.py) as part of the changeset, and synchronize the version in the admin panel ([`Refactored_OCR/admin.html`](file:///mnt/d/OCR/Refactored_OCR/admin.html)) and user interface pages (`index.html`, `login.html`).
 4. **Verify**: Run syntax checks, unit tests, or linting commands when applicable (`python3 -m py_compile ...`).
 5. **Report & Commit Message**: Summarize changes concisely with clickable links to modified files, and provide the commit message in the format `V<x.y.z> - <type>: <description>`.

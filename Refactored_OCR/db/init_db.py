@@ -1,5 +1,5 @@
 import logging
-from sqlalchemy import select
+from sqlalchemy import select, text
 from .session import Base, engine, AsyncSessionLocal
 from .models import User, ApiKey, ExtractionHistory, OCRBookTask, OCRBookTaskPage
 from core.security import hash_password, generate_raw_api_key
@@ -12,15 +12,70 @@ ADMIN_PASSWORD = getattr(config, "ADMIN_PASSWORD", "admin123")
 DEMO_USERNAME = getattr(config, "DEMO_USERNAME", "demo")
 DEMO_PASSWORD = getattr(config, "DEMO_PASSWORD", "demo123")
 
+# List of incremental, backward-compatible column migrations:
+# (table_name, column_name, postgres_sql, generic_or_sqlite_sql)
+SCHEMA_MIGRATIONS = [
+    (
+        "ocr_book_tasks",
+        "prompt_mode",
+        "ALTER TABLE ocr_book_tasks ADD COLUMN IF NOT EXISTS prompt_mode VARCHAR(32) DEFAULT 'classical';",
+        "ALTER TABLE ocr_book_tasks ADD COLUMN prompt_mode VARCHAR(32) DEFAULT 'classical'"
+    ),
+    (
+        "ocr_book_tasks",
+        "cooldown_seconds",
+        "ALTER TABLE ocr_book_tasks ADD COLUMN IF NOT EXISTS cooldown_seconds FLOAT DEFAULT 1.0;",
+        "ALTER TABLE ocr_book_tasks ADD COLUMN cooldown_seconds FLOAT DEFAULT 1.0"
+    ),
+    (
+        "users",
+        "created_version",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_version VARCHAR(32);",
+        "ALTER TABLE users ADD COLUMN created_version VARCHAR(32)"
+    ),
+]
+
+
+async def apply_schema_migrations(conn) -> None:
+    """Applies incremental schema updates and column additions for existing databases.
+
+    Ensures that newer application versions run smoothly against legacy database volumes
+    without requiring manual DB intervention or data loss.
+    """
+    dialect = conn.dialect.name
+    logger.info(f"Verifying database schema migrations (dialect: {dialect})...")
+
+    for table_name, column_name, pg_sql, generic_sql in SCHEMA_MIGRATIONS:
+        try:
+            if dialect == "postgresql":
+                await conn.execute(text(pg_sql))
+            else:
+                def get_cols(sync_conn):
+                    from sqlalchemy import inspect
+                    inspector = inspect(sync_conn)
+                    if table_name in inspector.get_table_names():
+                        return [c["name"] for c in inspector.get_columns(table_name)]
+                    return []
+
+                existing_cols = await conn.run_sync(get_cols)
+                if existing_cols and column_name not in existing_cols:
+                    await conn.execute(text(generic_sql))
+                    logger.info(f"Added missing column '{column_name}' to table '{table_name}'.")
+        except Exception as exc:
+            logger.warning(
+                f"Schema migration skipped or failed for table '{table_name}', column '{column_name}': {exc}"
+            )
+
 
 async def init_database() -> None:
-    """Creates database tables and provisions initial admin and demo users if not present."""
+    """Creates database tables, applies auto-migrations, and provisions initial admin and demo users."""
     logger.info("Initializing database schema...")
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await apply_schema_migrations(conn)
     except Exception as e:
-        logger.error(f"Error creating tables: {e}")
+        logger.error(f"Error creating tables or running migrations: {e}")
         raise
 
     async with AsyncSessionLocal() as session:
