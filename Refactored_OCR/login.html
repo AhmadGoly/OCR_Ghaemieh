@@ -71,9 +71,12 @@
         <div class="bg-[#121215]/80 backdrop-blur-xl border border-red-500/20 rounded-2xl p-7 shadow-2xl shadow-red-950/20">
             
             <!-- Error Alert -->
-            <div x-show="errorMessage" x-cloak class="mb-5 p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs flex items-center space-x-2 space-x-reverse">
-                <i data-lucide="alert-circle" class="w-4 h-4 text-red-400 shrink-0"></i>
-                <span x-text="errorMessage"></span>
+            <div x-show="errorMessage" x-cloak class="mb-5 p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs flex flex-col space-y-1">
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-red-400 shrink-0"></i>
+                    <span x-text="errorMessage"></span>
+                </div>
+                <div x-show="errorTime" class="text-[10px] text-red-300/80 mr-6 font-mono dir-ltr text-right" x-text="'زمان وقوع (تهران): ' + errorTime"></div>
             </div>
 
             <form @submit.prevent="submitLogin()" class="space-y-5">
@@ -132,7 +135,7 @@
 
         <!-- Footer -->
         <p class="text-center text-xs text-slate-500 mt-6">
-            سامانه پردازش اسناد و OCR قائمیه &bull; نسخه ۳.۹.۱
+            سامانه پردازش اسناد و OCR قائمیه &bull; نسخه ۳.۹.۲
         </p>
     </div>
 
@@ -144,9 +147,11 @@
                 showPassword: false,
                 loading: false,
                 errorMessage: '',
+                errorTime: '',
                 async submitLogin() {
                     this.loading = true;
                     this.errorMessage = '';
+                    this.errorTime = '';
                     try {
                         const res = await fetch('/api/auth/login', {
                             method: 'POST',
@@ -172,6 +177,19 @@
                         }
                     } catch (err) {
                         this.errorMessage = err.message;
+                        try {
+                            const now = new Date();
+                            const parts = new Intl.DateTimeFormat('en-CA', {
+                                timeZone: 'Asia/Tehran',
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                            }).formatToParts(now);
+                            const p = {};
+                            parts.forEach(({ type, value }) => { p[type] = value; });
+                            this.errorTime = `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second} (+03:30)`;
+                        } catch (_) {
+                            this.errorTime = new Date().toLocaleTimeString('fa-IR');
+                        }
                     } finally {
                         this.loading = false;
                         this.$nextTick(() => lucide.createIcons());

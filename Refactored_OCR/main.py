@@ -3,7 +3,7 @@ import io
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 import tempfile
@@ -201,11 +201,18 @@ app = FastAPI(
 
 logger = logging.getLogger("ghaemieh_ocr")
 
+# Tehran Timezone (UTC+03:30) Helper for Synchronized Error Logging
+TEHRAN_TZ = timezone(timedelta(hours=3, minutes=30))
+
+def get_tehran_now_str() -> str:
+    """Returns the current date and time in Tehran timezone (UTC+03:30) in standard format."""
+    return datetime.now(TEHRAN_TZ).strftime("%Y-%m-%d %H:%M:%S (+03:30)")
+
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     """
-    Standardized HTTP error handler with classified error codes (e.g. ERR-502-CONN, ERR-400-MDL)
-    and detailed server-side logging.
+    Standardized HTTP error handler with classified error codes (e.g. ERR-502-CONN, ERR-400-MDL),
+    accurate Tehran timestamps, and detailed server-side logging.
     """
     status_code = exc.status_code
     detail = exc.detail
@@ -231,8 +238,9 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
     else:
         error_code = f"ERR-{status_code}-{rand_suffix}"
 
+    tehran_time = get_tehran_now_str()
     logger.warning(
-        f"[{error_code}] HTTP {status_code} on {request.method} {request.url.path}: {detail}"
+        f"[{error_code}] [{tehran_time}] HTTP {status_code} on {request.method} {request.url.path}: {detail}"
     )
 
     return JSONResponse(
@@ -241,22 +249,24 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
             "error_code": error_code,
             "detail": detail,
             "status": status_code,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp_tehran": tehran_time
         }
     )
 
 @app.exception_handler(Exception)
 async def global_unhandled_exception_handler(request: Request, exc: Exception):
     """
-    Catches all unhandled 500 exceptions, logs the full stack trace with a unique trace ID,
-    and returns a structured JSON payload with error_code: ERR-500-XXXX.
+    Catches all unhandled 500 exceptions, logs the full stack trace with a unique trace ID
+    and Tehran timestamp, returning a structured JSON payload with error_code: ERR-500-XXXX.
     """
     trace_id = uuid.uuid4().hex[:4].upper()
     error_code = f"ERR-500-{trace_id}"
     full_trace = traceback.format_exc()
+    tehran_time = get_tehran_now_str()
 
     logger.error(
-        f"[{error_code}] Unhandled internal exception on {request.method} {request.url.path}:\n{full_trace}"
+        f"[{error_code}] [{tehran_time}] Unhandled internal exception on {request.method} {request.url.path}:\n{full_trace}"
     )
 
     return JSONResponse(
@@ -265,7 +275,8 @@ async def global_unhandled_exception_handler(request: Request, exc: Exception):
             "error_code": error_code,
             "detail": f"خطای داخلی در پردازش درخواست: {str(exc)}",
             "status": 500,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp_tehran": tehran_time
         }
     )
 

@@ -111,6 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const errorModal = document.getElementById("error-modal");
   const errorModalMessage = document.getElementById("error-modal-message");
   const errorModalCode = document.getElementById("error-modal-code");
+  const errorModalTime = document.getElementById("error-modal-time");
   const errorModalDetails = document.getElementById("error-modal-details");
   const closeErrorModalBtn = document.getElementById("close-error-modal-btn");
   const errorModalCloseBtn = document.getElementById("error-modal-close-btn");
@@ -582,10 +583,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!response.ok) {
         let errorDetail = "خطا در پردازش فایل";
         let serverErrorCode = "";
+        let serverTimestamp = null;
         try {
           const errorData = await response.json();
           errorDetail = errorData.detail || errorDetail;
           serverErrorCode = errorData.error_code || "";
+          serverTimestamp = errorData.timestamp_tehran || errorData.timestamp || null;
         } catch (_) {
           try {
             errorDetail = await response.text();
@@ -594,7 +597,8 @@ document.addEventListener("DOMContentLoaded", () => {
         showErrorModal({
           status: response.status,
           rawDetail: errorDetail,
-          errorCode: serverErrorCode
+          errorCode: serverErrorCode,
+          timestamp: serverTimestamp
         });
         return;
       }
@@ -940,8 +944,37 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Formats date or timestamp to Tehran time (UTC+03:30)
+  function formatTehranTime(dateInput = null) {
+    try {
+      const d = dateInput ? new Date(dateInput) : new Date();
+      if (isNaN(d.getTime())) return String(dateInput || "");
+
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Tehran",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+      }).formatToParts(d);
+
+      const p = {};
+      parts.forEach(({ type, value }) => { p[type] = value; });
+      return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second} (تهران +03:30)`;
+    } catch (_) {
+      const now = dateInput ? new Date(dateInput) : new Date();
+      const offsetMs = 3.5 * 60 * 60 * 1000;
+      const tehranDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + offsetMs);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${tehranDate.getFullYear()}-${pad(tehranDate.getMonth() + 1)}-${pad(tehranDate.getDate())} ${pad(tehranDate.getHours())}:${pad(tehranDate.getMinutes())}:${pad(tehranDate.getSeconds())} (تهران +03:30)`;
+    }
+  }
+
   // User-Friendly Persian Error Modal Handler
-  function showErrorModal({ status = 0, rawDetail = "", customMessage = "", errorCode = "" }) {
+  function showErrorModal({ status = 0, rawDetail = "", customMessage = "", errorCode = "", timestamp = null }) {
     if (!errorModal) {
       alert(customMessage || rawDetail || "خطایی رخ داده است.");
       return;
@@ -991,6 +1024,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (errorModalMessage) errorModalMessage.textContent = friendlyMessage;
     if (errorModalCode) errorModalCode.textContent = code;
+    if (errorModalTime) {
+      errorModalTime.textContent = formatTehranTime(timestamp);
+    }
 
     if (errorModalDetails) {
       if (detailStr && detailStr.trim()) {
@@ -1031,9 +1067,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (copyErrorCodeBtn) {
     copyErrorCodeBtn.addEventListener("click", () => {
-      const codeText = errorModalCode ? errorModalCode.textContent : "";
+      const codeText = errorModalCode ? errorModalCode.textContent.trim() : "";
+      const timeText = errorModalTime ? errorModalTime.textContent.trim() : "";
+      const textToCopy = `کد خطا: ${codeText} | زمان وقوع (تهران): ${timeText}`;
       if (codeText) {
-        navigator.clipboard.writeText(codeText).then(() => {
+        navigator.clipboard.writeText(textToCopy).then(() => {
           if (copyErrorBtnText) {
             const original = copyErrorBtnText.textContent;
             copyErrorBtnText.textContent = "کپی شد!";
@@ -1137,11 +1175,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!response.ok) {
           let errDetail = "خطا در ثبت وظیفه پردازش کتاب";
+          let errCode = "";
+          let errTimestamp = null;
           try {
             const errJson = await response.json();
             errDetail = errJson.detail || errDetail;
+            errCode = errJson.error_code || "";
+            errTimestamp = errJson.timestamp_tehran || errJson.timestamp || null;
           } catch (_) {}
-          showErrorModal({ status: response.status, rawDetail: errDetail });
+          showErrorModal({
+            status: response.status,
+            rawDetail: errDetail,
+            errorCode: errCode,
+            timestamp: errTimestamp
+          });
           return;
         }
 
@@ -1307,9 +1354,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let errorBanner = "";
         if (t.error_message) {
+          const taskTime = t.completed_at || t.created_at;
+          const timeBadge = taskTime ? `<span class="font-mono text-[10px] text-rose-300/80 dir-ltr bg-rose-950/80 px-2 py-0.5 rounded border border-rose-500/30 whitespace-nowrap shrink-0">${escapeHtml(formatTehranTime(taskTime))}</span>` : "";
           errorBanner = `
-            <div class="p-2 rounded-lg bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-300 flex items-center justify-between gap-2">
-              <span>${escapeHtml(t.error_message)}</span>
+            <div class="p-2.5 rounded-lg bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-300 flex flex-wrap items-center justify-between gap-2">
+              <span class="leading-relaxed">${escapeHtml(t.error_message)}</span>
+              ${timeBadge}
             </div>
           `;
         }

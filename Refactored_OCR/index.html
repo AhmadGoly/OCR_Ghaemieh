@@ -61,7 +61,7 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۹.۱</span>
+                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۹.۲</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
@@ -460,7 +460,7 @@
 
     <!-- Footer -->
     <footer class="border-t border-zinc-800/80 bg-[#121215]/40 py-6 mt-12 text-center text-xs text-slate-500">
-        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۹.۱ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
+        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۹.۲ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
     </footer>
 
     <!-- Task Pages Detail Modal -->
@@ -577,16 +577,25 @@
                 </p>
             </div>
 
-            <!-- Error Code Card -->
-            <div class="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between">
-                <div>
-                    <span class="text-[11px] text-slate-400 block">کد پیگیری خطا:</span>
-                    <code id="error-modal-code" class="font-mono text-sm text-rose-400 font-bold select-all">ERR-500</code>
+            <!-- Error Code & Time Card -->
+            <div class="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-[11px] text-slate-400 block">کد پیگیری خطا:</span>
+                        <code id="error-modal-code" class="font-mono text-sm text-rose-400 font-bold select-all">ERR-500</code>
+                    </div>
+                    <button type="button" id="copy-error-code-btn" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-xs font-medium flex items-center space-x-1 space-x-reverse transition">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span id="copy-error-btn-text">کپی کد و زمان</span>
+                    </button>
                 </div>
-                <button type="button" id="copy-error-code-btn" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-slate-200 text-xs font-medium flex items-center space-x-1 space-x-reverse transition">
-                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-                    <span id="copy-error-btn-text">کپی کد</span>
-                </button>
+                <div class="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs">
+                    <span class="text-[11px] text-slate-400 flex items-center space-x-1.5 space-x-reverse">
+                        <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i>
+                        <span>زمان وقوع خطا (به وقت تهران):</span>
+                    </span>
+                    <span id="error-modal-time" class="font-mono text-xs text-amber-300 font-bold dir-ltr">--</span>
+                </div>
             </div>
 
             <!-- Contact Admin Notice -->
