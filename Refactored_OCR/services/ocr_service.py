@@ -68,9 +68,11 @@ class OCRService:
                         secondary_model = self.models.get("olmocr_2b")
                     elif secondary_model_name in ("gemma", "gemma_4"):
                         secondary_model = self.models.get("gemma4")
-                if secondary_model:
+                if secondary_model and secondary_model != primary_model:
                     text2 = secondary_model.process(processed_image, lang)
                     ocr_outputs.append(text2)
+                else:
+                    secondary_model_name = None
 
             if self.merger:
                 llm_start = time.time()

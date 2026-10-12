@@ -155,6 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
   checkUserSession();
 
   // Synchronize model availability and disable inactive models
+  syncSecondaryModelOptions();
   syncModelAvailability();
 
   async function checkUserSession() {
@@ -432,6 +433,51 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Synchronizes secondary model dropdown options based on the primary (base) model selection.
+  // 1. Prevents the user from selecting the same model that is already chosen as the base model.
+  // 2. Disables that option and appends '(مدل پایه انتخابی)'.
+  // 3. Automatically resets secondary model to "" (هیچکدام) if it was previously set to that model.
+  function syncSecondaryModelOptions() {
+    if (!modelSelect || !secondaryModelSelect) return;
+    const currentBaseModel = modelSelect.value ? modelSelect.value.trim().toLowerCase() : "";
+
+    Array.from(secondaryModelSelect.options).forEach((opt) => {
+      const val = opt.value ? opt.value.trim().toLowerCase() : "";
+      if (!val) {
+        // "هیچکدام (فقط پاکسازی تک‌مدلی)"
+        return;
+      }
+
+      let baseText = opt.getAttribute("data-original-title");
+      if (!baseText) {
+        baseText = opt.textContent.replace(/\s*\((غیرفعال|غیرفعال در سرور|مدل پایه انتخابی)\)/g, "").trim();
+        opt.setAttribute("data-original-title", baseText);
+      }
+
+      const isServerDisabled = opt.getAttribute("data-server-disabled") === "true";
+      const isBaseModel = (val === currentBaseModel);
+
+      if (isBaseModel) {
+        opt.disabled = true;
+        opt.textContent = `${baseText} (مدل پایه انتخابی)`;
+        opt.classList.add("text-zinc-500", "bg-zinc-950");
+      } else if (isServerDisabled) {
+        opt.disabled = true;
+        opt.textContent = `${baseText} (غیرفعال)`;
+        opt.classList.add("text-zinc-500", "bg-zinc-950");
+      } else {
+        opt.disabled = false;
+        opt.textContent = baseText;
+        opt.classList.remove("text-zinc-500", "bg-zinc-950");
+      }
+    });
+
+    // If currently selected secondary model is the same as the base model, reset to "" (هیچکدام)
+    if (secondaryModelSelect.value && secondaryModelSelect.value.trim().toLowerCase() === currentBaseModel) {
+      secondaryModelSelect.value = "";
+    }
+  }
+
   // LLM toggle reveals secondary model and checks Gemma 4 notice
   llmToggle.addEventListener("change", (e) => {
     if (e.target.checked) {
@@ -440,12 +486,24 @@ document.addEventListener("DOMContentLoaded", () => {
       secondaryModelContainer.classList.add("hidden");
     }
     updateGemmaLlmNotice();
+    syncSecondaryModelOptions();
   });
 
-  // Base OCR model change updates Gemma notice if LLM is active
+  // Base OCR model change updates Gemma notice and secondary model restrictions
   if (modelSelect) {
     modelSelect.addEventListener("change", () => {
       updateGemmaLlmNotice();
+      syncSecondaryModelOptions();
+    });
+  }
+
+  // Secondary model change validates against base model
+  if (secondaryModelSelect) {
+    secondaryModelSelect.addEventListener("change", () => {
+      const currentBaseModel = modelSelect ? modelSelect.value.trim().toLowerCase() : "";
+      if (secondaryModelSelect.value && secondaryModelSelect.value.trim().toLowerCase() === currentBaseModel) {
+        secondaryModelSelect.value = "";
+      }
     });
   }
 
@@ -920,6 +978,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const modelsEnabled = configData.models_enabled || {};
       applyModelAvailability(modelSelect, modelsEnabled, false);
       applyModelAvailability(secondaryModelSelect, modelsEnabled, true);
+      syncSecondaryModelOptions();
       updateGemmaLlmNotice();
     } catch (err) {
       console.warn("Failed to synchronize model availability:", err);
@@ -939,11 +998,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const isEnabled = modelsEnabled[val] !== false;
+      opt.setAttribute("data-server-disabled", (!isEnabled) ? "true" : "false");
       opt.disabled = !isEnabled;
 
       let baseText = opt.getAttribute("data-original-title");
       if (!baseText) {
-        baseText = opt.textContent.replace(/\s*\((غیرفعال|غیرفعال در سرور)\)/g, "").trim();
+        baseText = opt.textContent.replace(/\s*\((غیرفعال|غیرفعال در سرور|مدل پایه انتخابی)\)/g, "").trim();
         opt.setAttribute("data-original-title", baseText);
       }
 
@@ -959,11 +1019,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // If currently selected option is disabled, automatically fallback to first enabled option
+    // If currently selected option is disabled, automatically fallback
     if (!selectedOptionValid) {
-      const firstEnabled = options.find((opt) => !opt.disabled);
-      if (firstEnabled) {
-        selectElement.value = firstEnabled.value;
+      if (allowEmpty) {
+        selectElement.value = "";
+      } else {
+        const firstEnabled = options.find((opt) => !opt.disabled);
+        if (firstEnabled) {
+          selectElement.value = firstEnabled.value;
+        }
       }
     }
   }
