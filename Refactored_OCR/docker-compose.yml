@@ -28,9 +28,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    expose:
+      - "4567"
     ports:
-      - "3334:4567"
-      - "8001:4567"
+      - "127.0.0.1:4567:4567"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
@@ -42,3 +43,18 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ocr_admin}:${POSTGRES_PASSWORD:-ocr_secret_password}@postgres:5432/${POSTGRES_DB:-ghaemieh_ocr_db}
     volumes:
       - ./:/app
+
+  nginx:
+    image: nginx:alpine
+    container_name: ghaemieh-ocr-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-3334}:3334"
+      - "${NGINX_ALT_PORT:-8001}:8001"
+      - "${NGINX_HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - ocr
+
