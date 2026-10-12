@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const llmToggle = document.getElementById("llm-toggle");
   const secondaryModelContainer = document.getElementById("secondary-model-container");
   const secondaryModelSelect = document.getElementById("secondary-model-select");
+  const gemmaLlmNotice = document.getElementById("gemma-llm-notice");
   const scaleSlider = document.getElementById("scale-slider");
   const scaleValue = document.getElementById("scale-value");
   const startPageInput = document.getElementById("start-page");
@@ -417,14 +418,36 @@ document.addEventListener("DOMContentLoaded", () => {
     scaleValue.textContent = parseFloat(e.target.value).toFixed(1);
   });
 
-  // LLM toggle reveals secondary model
+  // Function to show/hide Gemma 4 recommendation warning when LLM correction is active
+  function updateGemmaLlmNotice() {
+    if (!gemmaLlmNotice) return;
+    const isLlmActive = llmToggle && llmToggle.checked;
+    const currentModel = modelSelect ? modelSelect.value.trim().toLowerCase() : "";
+    const isGemmaSelected = currentModel === "gemma4" || currentModel.includes("gemma");
+
+    if (isLlmActive && isGemmaSelected) {
+      gemmaLlmNotice.classList.remove("hidden");
+    } else {
+      gemmaLlmNotice.classList.add("hidden");
+    }
+  }
+
+  // LLM toggle reveals secondary model and checks Gemma 4 notice
   llmToggle.addEventListener("change", (e) => {
     if (e.target.checked) {
       secondaryModelContainer.classList.remove("hidden");
     } else {
       secondaryModelContainer.classList.add("hidden");
     }
+    updateGemmaLlmNotice();
   });
+
+  // Base OCR model change updates Gemma notice if LLM is active
+  if (modelSelect) {
+    modelSelect.addEventListener("change", () => {
+      updateGemmaLlmNotice();
+    });
+  }
 
   // File browser trigger
   fileBrowserButton.addEventListener("click", () => fileInput.click());
@@ -897,6 +920,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const modelsEnabled = configData.models_enabled || {};
       applyModelAvailability(modelSelect, modelsEnabled, false);
       applyModelAvailability(secondaryModelSelect, modelsEnabled, true);
+      updateGemmaLlmNotice();
     } catch (err) {
       console.warn("Failed to synchronize model availability:", err);
     }

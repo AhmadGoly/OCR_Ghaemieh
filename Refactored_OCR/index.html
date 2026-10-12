@@ -61,7 +61,7 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۹.۲</span>
+                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۹.۳</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
@@ -227,6 +227,19 @@
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <input type="checkbox" id="llm-toggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-zinc-700 bg-zinc-900">
                         <label for="llm-toggle" class="text-xs font-bold text-white cursor-pointer">فعال‌سازی تصحیح هوشمند و ادغام دوگانه مدل‌ها با LLM</label>
+                    </div>
+
+                    <!-- Gemma 4 Intelligent Correction Notice -->
+                    <div id="gemma-llm-notice" class="hidden p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start space-x-2.5 space-x-reverse transition-all duration-200 shadow-sm">
+                        <div class="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                            <i data-lucide="info" class="w-3.5 h-3.5"></i>
+                        </div>
+                        <div class="leading-relaxed flex-1">
+                            <strong class="text-amber-300 block mb-1">پیشنهاد سیستم در خصوص مدل پایه Gemma 4:</strong>
+                            <p class="text-[11px] text-amber-200/90 leading-5">
+                                با توجه به اینکه مدل پایه انتخابی شما <strong>Gemma 4</strong> است، استفاده از «تصحیح هوشمند» پیشنهاد نمی‌شود؛ زیرا این مدل به قدری قدرتمند و دقیق است که به تنهایی بهترین خروجی را تولید کرده و نیازی به تصحیح هوشمند ندارد.
+                            </p>
+                        </div>
                     </div>
 
                     <div id="secondary-model-container" class="hidden pl-6 pr-6 py-4 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-4">
@@ -460,7 +473,7 @@
 
     <!-- Footer -->
     <footer class="border-t border-zinc-800/80 bg-[#121215]/40 py-6 mt-12 text-center text-xs text-slate-500">
-        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۹.۲ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
+        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۹.۳ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
     </footer>
 
     <!-- Task Pages Detail Modal -->
