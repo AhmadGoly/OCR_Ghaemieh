@@ -199,6 +199,35 @@ app = FastAPI(
     openapi_url=None,
 )
 
+# HTTP Anti-Caching Headers for Fresh UI Deliveries without Hard Refreshes (Shift+F5)
+NO_CACHE_HTML_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+STATIC_REVALIDATE_HEADERS = {
+    "Cache-Control": "no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+}
+
+@app.middleware("http")
+async def add_anti_caching_headers(request: Request, call_next):
+    """
+    Middleware ensuring browsers never serve stale HTML or static assets,
+    preventing users from needing Shift+F5 hard refreshes upon UI updates.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path in ["/", "/login", "/admin"] or path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    elif path in ["/script.js", "/style.css"]:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
 logger = logging.getLogger("ghaemieh_ocr")
 
 # Tehran Timezone (UTC+03:30) Helper for Synchronized Error Logging
@@ -394,11 +423,11 @@ async def read_index(request: Request):
     token = request.cookies.get("access_token")
     if not token or not decode_access_token(token):
         return RedirectResponse(url="/login")
-    return FileResponse(os.path.join(BASE_DIR, 'index.html'))
+    return FileResponse(os.path.join(BASE_DIR, 'index.html'), headers=NO_CACHE_HTML_HEADERS)
 
 @app.get("/login", include_in_schema=False)
 async def read_login():
-    return FileResponse(os.path.join(BASE_DIR, 'login.html'))
+    return FileResponse(os.path.join(BASE_DIR, 'login.html'), headers=NO_CACHE_HTML_HEADERS)
 
 @app.get("/admin", include_in_schema=False)
 async def read_admin(request: Request):
@@ -408,15 +437,15 @@ async def read_admin(request: Request):
     payload = decode_access_token(token)
     if not payload or not payload.get("is_admin"):
         return RedirectResponse(url="/login")
-    return FileResponse(os.path.join(BASE_DIR, 'admin.html'))
+    return FileResponse(os.path.join(BASE_DIR, 'admin.html'), headers=NO_CACHE_HTML_HEADERS)
 
 @app.get("/style.css", include_in_schema=False)
 async def read_style():
-    return FileResponse(os.path.join(BASE_DIR, 'style.css'))
+    return FileResponse(os.path.join(BASE_DIR, 'style.css'), headers=STATIC_REVALIDATE_HEADERS)
 
 @app.get("/script.js", include_in_schema=False)
 async def read_script():
-    return FileResponse(os.path.join(BASE_DIR, 'script.js'))
+    return FileResponse(os.path.join(BASE_DIR, 'script.js'), headers=STATIC_REVALIDATE_HEADERS)
 
 # --- Secure API Documentation Endpoints (Protected by Token / Admin Auth) ---
 
