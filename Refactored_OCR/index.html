@@ -66,7 +66,7 @@
                 <div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <span class="text-base font-black text-white">سامانه هوشمند OCR قائمیه</span>
-                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۹.۵</span>
+                        <span id="app-version-badge" class="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">نسخه ۳.۹.۶</span>
                     </div>
                     <p class="text-[11px] text-slate-400">استخراج دقیق متون فارسی، عربی و انگلیسی با مدل‌های چندوجهی بینایی (VLM)</p>
                 </div>
@@ -292,20 +292,16 @@
 
             </div>
 
-            <!-- Submit Action Buttons (Instant vs Background Book Task) -->
+            <!-- Submit Action Button (Unified Background Queue) -->
             <div class="pt-4 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
-                <p class="text-[11px] text-slate-400">
-                    <i data-lucide="info" class="w-3.5 h-3.5 inline ml-1 text-amber-400"></i>
-                    برای کتاب‌ها و اسناد چندصفحه‌ای، از دکمه <strong>«ثبت در صف پردازش کتاب (پس‌زمینه)»</strong> استفاده کنید تا در صورت خطا یا بستن مرورگر، پردازش ادامه یابد.
+                <p class="text-[11px] text-slate-400 flex items-center space-x-1.5 space-x-reverse">
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
+                    <span>کلیه اسناد و تصاویر در <strong>صف پردازش هوشمند پس‌زمینه</strong> مدیریت می‌شوند تا پایداری سرور تضمین شده و در صورت قطعی اینترنت، استخراج متوقف نشود.</span>
                 </p>
-                <div class="flex flex-wrap items-center gap-3">
-                    <button type="button" id="submit-book-task-button" disabled class="px-5 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-amber-500/40 text-amber-300 hover:text-amber-200 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-xs shadow-lg transition flex items-center space-x-2 space-x-reverse">
-                        <i data-lucide="book-open-check" class="w-4 h-4 text-amber-400"></i>
-                        <span>ثبت در صف پردازش کتاب (پس‌زمینه)</span>
-                    </button>
-                    <button type="button" id="submit-button" disabled class="px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-xl shadow-red-950/40 transition flex items-center space-x-2 space-x-reverse">
-                        <i data-lucide="play" class="w-4 h-4"></i>
-                        <span>شروع استخراج فوری</span>
+                <div>
+                    <button type="button" id="submit-button" disabled class="px-7 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-xl shadow-red-950/40 transition flex items-center space-x-2 space-x-reverse">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                        <span>ثبت در صف و شروع استخراج</span>
                     </button>
                 </div>
             </div>
@@ -444,10 +440,10 @@
                     </div>
                     <div>
                         <div class="flex items-center space-x-2 space-x-reverse">
-                            <h3 class="text-sm font-bold text-white">صندوق وظایف پردازش کتاب (پس‌زمینه)</h3>
+                            <h3 class="text-sm font-bold text-white">صندوق وظایف و نتایج استخراج اسناد (صف هوشمند)</h3>
                             <span id="active-book-tasks-badge" class="hidden text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">در حال پردازش...</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-0.5">کتاب‌های آپلود شده در پس‌زمینه صفحه به صفحه با ذخیره خودکار و تلاش مجدد استخراج می‌شوند و پس از اتمام قابل دانلود هستند.</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">اسناد و تصاویر آپلود شده به صورت پایدار و مطمئن در صف استخراج می‌شوند و خروجی آن‌ها پس از اتمام قابل مشاهده و دانلود است.</p>
                     </div>
                 </div>
 
@@ -478,7 +474,7 @@
 
     <!-- Footer -->
     <footer class="border-t border-zinc-800/80 bg-[#121215]/40 py-6 mt-12 text-center text-xs text-slate-500">
-        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۹.۵ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
+        سامانه استخراج هوشمند متن قائمیه &bull; نسخه ۳.۹.۶ &bull; پشتیبانی از VLM و هوش مصنوعی مولد
     </footer>
 
     <!-- Task Pages Detail Modal -->
@@ -642,6 +638,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=3.9.5"></script>
+    <script src="script.js?v=3.9.6"></script>
 </body>
 </html>

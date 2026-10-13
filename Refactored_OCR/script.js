@@ -603,7 +603,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
   }
 
-  // Submit request
+  // Unified Document Submission to Background Processing Queue (POST /api/tasks/book)
   submitButton.addEventListener("click", async () => {
     if (!selectedFile) return;
 
@@ -616,6 +616,8 @@ document.addEventListener("DOMContentLoaded", () => {
     formData.append("crop_whitespaces", cropToggle.checked);
     formData.append("scale", scaleSlider.value);
     formData.append("use_llm", llmToggle.checked);
+    formData.append("cooldown_seconds", cooldownInput ? cooldownInput.value || "1.0" : "1.0");
+
     if (llmToggle.checked) {
       if (secondaryModelSelect.value) {
         formData.append("secondary_model", secondaryModelSelect.value);
@@ -629,71 +631,65 @@ document.addEventListener("DOMContentLoaded", () => {
       if (endPageInput.value) formData.append("end_page", endPageInput.value);
     }
 
-    const endpoint = (selectedFile.type === "application/pdf" || selectedFile.name.endsWith(".pdf")) ? "/ocr/pdf" : "/ocr/image";
-
-    // Show loading
-    loadingIndicator.hidden = false;
-    resultsArea.hidden = true;
+    const originalBtnHtml = submitButton.innerHTML;
     submitButton.disabled = true;
-    imageResultsContainer.hidden = true;
+    submitButton.innerHTML = `
+      <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-white"></i>
+      <span>در حال ثبت در صف هوشمند...</span>
+    `;
+    if (window.lucide) lucide.createIcons();
 
     try {
-      const headers = {};
-      if (currentUserToken) {
-        headers["X-API-Key"] = currentUserToken;
-      }
-
-      const response = await fetch(endpoint, {
+      const response = await fetch("/api/tasks/book", {
         method: "POST",
-        headers: headers,
+        headers: getAuthHeaders(),
         body: formData,
       });
 
       if (response.status === 401) {
         showErrorModal({
           status: 401,
-          rawDetail: "Unauthorized: Session or token expired.",
+          rawDetail: "اعتبار نشست شما منقضی شده است. لطفاً مجدداً وارد سیستم شوید.",
           errorCode: "ERR-401"
         });
         setTimeout(() => {
           window.location.href = "/login";
-        }, 3000);
+        }, 2000);
         return;
       }
 
       if (!response.ok) {
-        let errorDetail = "خطا در پردازش فایل";
-        let serverErrorCode = "";
-        let serverTimestamp = null;
+        let errDetail = "خطا در ثبت وظیفه استخراج در صف";
+        let errCode = "";
+        let errTimestamp = null;
         try {
-          const errorData = await response.json();
-          errorDetail = errorData.detail || errorDetail;
-          serverErrorCode = errorData.error_code || "";
-          serverTimestamp = errorData.timestamp_tehran || errorData.timestamp || null;
-        } catch (_) {
-          try {
-            errorDetail = await response.text();
-          } catch (__) {}
-        }
+          const errJson = await response.json();
+          errDetail = errJson.detail || errDetail;
+          errCode = errJson.error_code || "";
+          errTimestamp = errJson.timestamp_tehran || errJson.timestamp || null;
+        } catch (_) {}
         showErrorModal({
           status: response.status,
-          rawDetail: errorDetail,
-          errorCode: serverErrorCode,
-          timestamp: serverTimestamp
+          rawDetail: errDetail,
+          errorCode: errCode,
+          timestamp: errTimestamp
         });
         return;
       }
 
-      const result = await response.json();
-      displayResults(result, !endpoint.includes("pdf"));
+      await fetchBookTasks();
+      if (bookTasksSection) {
+        window.scrollTo({ top: bookTasksSection.offsetTop - 30, behavior: "smooth" });
+      }
     } catch (error) {
       showErrorModal({
         status: 0,
         rawDetail: error.message || String(error)
       });
     } finally {
-      loadingIndicator.hidden = true;
-      submitButton.disabled = false;
+      submitButton.disabled = !selectedFile;
+      submitButton.innerHTML = originalBtnHtml;
+      if (window.lucide) lucide.createIcons();
     }
   });
 
@@ -1211,87 +1207,10 @@ document.addEventListener("DOMContentLoaded", () => {
     return `حدود ${secs} ثانیه`;
   }
 
-  // Submit Book Task (POST /api/tasks/book)
+  // Backward compatibility alias for submitBookTaskButton if present
   if (submitBookTaskButton) {
-    submitBookTaskButton.addEventListener("click", async () => {
-      if (!selectedFile) return;
-
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("model", modelSelect.value);
-      formData.append("lang", langSelect.value);
-      formData.append("preprocess", preprocessToggle.checked);
-      formData.append("contrast", contrastToggle.checked);
-      formData.append("crop_whitespaces", cropToggle.checked);
-      formData.append("scale", scaleSlider.value);
-      formData.append("use_llm", llmToggle.checked);
-      formData.append("cooldown_seconds", cooldownInput ? cooldownInput.value || "1.0" : "1.0");
-
-      if (llmToggle.checked) {
-        if (secondaryModelSelect.value) {
-          formData.append("secondary_model", secondaryModelSelect.value);
-        }
-        const promptMode = selectedPromptModeInput ? selectedPromptModeInput.value : "classical";
-        formData.append("prompt_mode", promptMode);
-      }
-
-      if (selectedFile.type === "application/pdf" || selectedFile.name.endsWith(".pdf")) {
-        if (startPageInput.value) formData.append("start_page", startPageInput.value);
-        if (endPageInput.value) formData.append("end_page", endPageInput.value);
-      }
-
-      const originalBtnHtml = submitBookTaskButton.innerHTML;
-      submitBookTaskButton.disabled = true;
-      submitButton.disabled = true;
-      submitBookTaskButton.innerHTML = `
-        <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-amber-400"></i>
-        <span>در حال ثبت کتاب در صف...</span>
-      `;
-      if (window.lucide) lucide.createIcons();
-
-      try {
-        const response = await fetch("/api/tasks/book", {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: formData,
-        });
-
-        if (response.status === 401) {
-          window.location.href = "/login";
-          return;
-        }
-
-        if (!response.ok) {
-          let errDetail = "خطا در ثبت وظیفه پردازش کتاب";
-          let errCode = "";
-          let errTimestamp = null;
-          try {
-            const errJson = await response.json();
-            errDetail = errJson.detail || errDetail;
-            errCode = errJson.error_code || "";
-            errTimestamp = errJson.timestamp_tehran || errJson.timestamp || null;
-          } catch (_) {}
-          showErrorModal({
-            status: response.status,
-            rawDetail: errDetail,
-            errorCode: errCode,
-            timestamp: errTimestamp
-          });
-          return;
-        }
-
-        await fetchBookTasks();
-        if (bookTasksSection) {
-          window.scrollTo({ top: bookTasksSection.offsetTop - 40, behavior: "smooth" });
-        }
-      } catch (err) {
-        showErrorModal({ status: 0, rawDetail: err.message || String(err) });
-      } finally {
-        submitBookTaskButton.disabled = !selectedFile;
-        submitButton.disabled = !selectedFile;
-        submitBookTaskButton.innerHTML = originalBtnHtml;
-        if (window.lucide) lucide.createIcons();
-      }
+    submitBookTaskButton.addEventListener("click", () => {
+      if (submitButton) submitButton.click();
     });
   }
 
